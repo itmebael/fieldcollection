@@ -1,7 +1,7 @@
 {
   "version": 2,
   "installCommand": "echo Skipping install",
-  "buildCommand": "sh vercel_build.sh",
+  "buildCommand": "echo Using prebuilt web output",
   "outputDirectory": "build/web",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
