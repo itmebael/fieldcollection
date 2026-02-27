@@ -1,0 +1,10 @@
+# Flutter configuration for Windows to help with EGL context issues
+flutter:
+  # Enable software rendering as fallback for GPU issues
+  renderer: "software"
+  
+  # Reduce GPU memory usage
+  gpu_rasterization: false
+  
+  # Optimize for Windows desktop
+  enable_impeller: false
