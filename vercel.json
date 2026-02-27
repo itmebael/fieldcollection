@@ -1,7 +1,7 @@
 {
   "version": 2,
   "installCommand": "echo Skipping install",
-  "buildCommand": "git clone https://github.com/flutter/flutter.git --depth 1 --branch stable && cd flutter && git fetch --depth 1 origin 2663184aa79047d0a33a14a3b607954f8fdd8730 && git checkout 2663184aa79047d0a33a14a3b607954f8fdd8730 && cd .. && export PATH=\"$PWD/flutter/bin:$PATH\" && flutter config --enable-web && flutter --version && flutter pub get && flutter build web --release",
+  "buildCommand": "sh vercel_build.sh",
   "outputDirectory": "build/web",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
