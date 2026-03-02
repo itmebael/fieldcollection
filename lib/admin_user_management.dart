@@ -47,7 +47,7 @@ class _AdminUserManagementScreenState extends State<AdminUserManagementScreen> {
       final data = await Supabase.instance.client
           .from('user_profiles')
           .select(
-              'id, email, full_name, role, is_active, created_at, serial_start_no, serial_end_no, next_serial_no, signature_image_path')
+              'id, email, full_name, role, is_active, created_at, serial_start_no, serial_end_no, next_serial_no, signature_image_path, avatar_image_path')
           .order('created_at', ascending: false)
           .limit(20);
 
@@ -361,6 +361,13 @@ class _AdminUserManagementScreenState extends State<AdminUserManagementScreen> {
   }
 
   String _staffImageUrl(Map<String, dynamic> user) {
+    final avatarPath = (user['avatar_image_path'] ?? '').toString().trim();
+    if (avatarPath.isNotEmpty) {
+      return Supabase.instance.client.storage
+          .from('profile-pictures')
+          .getPublicUrl(avatarPath);
+    }
+
     final signaturePath =
         (user['signature_image_path'] ?? '').toString().trim();
     if (signaturePath.isNotEmpty) {

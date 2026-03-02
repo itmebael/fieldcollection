@@ -61,6 +61,10 @@ class _ManageReceiptOverviewPageState extends State<ManageReceiptOverviewPage> {
     return const Color(0xFF1E3A5F);
   }
 
+  Color _onColorFor(Color background) {
+    return background.computeLuminance() > 0.62 ? Colors.black87 : Colors.white;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -104,18 +108,20 @@ class _ManageReceiptOverviewPageState extends State<ManageReceiptOverviewPage> {
   }
 
   Widget _buildReceiptFormContainer() {
+    final headerColor = _themeColorForCategory(widget.initialCategory);
+    final headerTextColor = _onColorFor(headerColor);
     return Column(
       children: [
         // Header with back button
         Container(
           padding: const EdgeInsets.all(16),
-          color: _themeColorForCategory(widget.initialCategory),
+          color: headerColor,
           child: Row(
             children: [
-              const Text(
+              Text(
                 'View Receipt',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: headerTextColor,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),

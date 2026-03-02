@@ -34,6 +34,11 @@ class _NatureManagementScreenState extends State<NatureManagementScreen> {
         msg.contains('unauthorized');
   }
 
+  bool _isMalformedArrayLiteralError(Object error) {
+    final msg = error.toString().toLowerCase();
+    return msg.contains('22p02') && msg.contains('malformed array literal');
+  }
+
   Future<void> _handleAuthExpired() async {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -345,7 +350,15 @@ class _NatureManagementScreenState extends State<NatureManagementScreen> {
             _selectedCategory == 'Marine' ? _selectedMarineFlow : null,
       };
 
-      await client.from('receipt_natures').insert(natureData);
+      try {
+        await client.from('receipt_natures').insert(natureData);
+      } catch (e) {
+        if (!_isMalformedArrayLiteralError(e)) rethrow;
+        final retryPayload = Map<String, dynamic>.from(natureData);
+        final code = (retryPayload['nature_code'] ?? '').toString().trim();
+        retryPayload['nature_code'] = code.isEmpty ? <String>[] : <String>[code];
+        await client.from('receipt_natures').insert(retryPayload);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

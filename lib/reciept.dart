@@ -71,6 +71,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   String selectedMarineFlow = 'Incoming';
   bool isSaving = false;
   bool _isPrinting = false;
+  bool _hasPendingUnpersistedData = false;
   List<Map<String, dynamic>> availableNatures = [];
   List<String> _availableCategories = List<String>.from(
     CategoryConstants.categories,
@@ -236,7 +237,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   String _categoryDraftKey(String category) =>
       category.trim().toLowerCase();
 
-  void _saveDraftForCurrentCategory() {
+  void _saveDraftForCurrentCategory({bool markUnsaved = true}) {
     final key = _categoryDraftKey(selectedCategory);
     if (key.isEmpty) return;
     _categoryDrafts[key] = _CategoryDraft(
@@ -245,6 +246,9 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       amounts: amountCtrls.map((c) => c.text).toList(),
       marineFlow: selectedMarineFlow,
     );
+    if (markUnsaved) {
+      _hasPendingUnpersistedData = true;
+    }
   }
 
   void _restoreDraftForCategory(String category) {
@@ -533,7 +537,9 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
 
   @override
   void dispose() {
-    _saveDraftForCurrentCategory();
+    if (!widget.readOnly && _hasPendingUnpersistedData) {
+      _categoryDrafts.clear();
+    }
     _natureLoadVersion++;
     _verticalScrollController.dispose();
     serialCtrl.dispose();
@@ -1155,6 +1161,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           backgroundColor: Color(0xFF1E3A5F),
         ),
       );
+      _hasPendingUnpersistedData = false;
 
       // Call the success callback if provided
       if (widget.onSaveSuccess != null) {
@@ -1566,9 +1573,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       };
 
       try {
-        await Supabase.instance.client
-            .from('receipt_print_logs')
-            .insert(printLogPayload);
+        await _insertPrintLogWithNatureCodeFallback(printLogPayload);
         // Also flush any old queued logs when connection is available.
         await OfflineReceiptStorageService.syncPending();
       } catch (_) {
@@ -1589,6 +1594,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       setState(() {
         serialCtrl.text = nextSerialNo.toString();
       });
+      _hasPendingUnpersistedData = false;
       _resetReceiptForNewEntry();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1606,6 +1612,42 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       if (mounted) {
         setState(() => _isPrinting = false);
       }
+    }
+  }
+
+  bool _isMalformedArrayLiteralError(Object error) {
+    final msg = error.toString().toLowerCase();
+    return msg.contains('22p02') && msg.contains('malformed array literal');
+  }
+
+  List<String> _normalizeNatureCodesToList(dynamic raw) {
+    if (raw is List) {
+      return raw
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    final text = raw?.toString().trim() ?? '';
+    if (text.isEmpty) return <String>[];
+    return text
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+  }
+
+  Future<void> _insertPrintLogWithNatureCodeFallback(
+    Map<String, dynamic> payload,
+  ) async {
+    final client = Supabase.instance.client;
+    try {
+      await client.from('receipt_print_logs').insert(payload);
+    } catch (e) {
+      if (!_isMalformedArrayLiteralError(e)) rethrow;
+      final retryPayload = Map<String, dynamic>.from(payload);
+      retryPayload['nature_code'] =
+          _normalizeNatureCodesToList(retryPayload['nature_code']);
+      await client.from('receipt_print_logs').insert(retryPayload);
     }
   }
 

@@ -67,9 +67,7 @@ class OfflineReceiptStorageService {
     for (final row in queue) {
       try {
         final payload = _normalizePrintLogPayload(row);
-        await Supabase.instance.client
-            .from('receipt_print_logs')
-            .insert(payload);
+        await _insertPrintLogWithNatureCodeFallback(payload);
         uploaded++;
       } catch (e) {
         _lastSyncError = e.toString();
@@ -132,5 +130,41 @@ class OfflineReceiptStorageService {
       }
     }
     return <dynamic>[];
+  }
+
+  static bool _isMalformedArrayLiteralError(Object error) {
+    final msg = error.toString().toLowerCase();
+    return msg.contains('22p02') && msg.contains('malformed array literal');
+  }
+
+  static List<String> _normalizeNatureCodesToList(dynamic raw) {
+    if (raw is List) {
+      return raw
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    final text = raw?.toString().trim() ?? '';
+    if (text.isEmpty) return <String>[];
+    return text
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+  }
+
+  static Future<void> _insertPrintLogWithNatureCodeFallback(
+    Map<String, dynamic> payload,
+  ) async {
+    final client = Supabase.instance.client;
+    try {
+      await client.from('receipt_print_logs').insert(payload);
+    } catch (e) {
+      if (!_isMalformedArrayLiteralError(e)) rethrow;
+      final retryPayload = Map<String, dynamic>.from(payload);
+      retryPayload['nature_code'] =
+          _normalizeNatureCodesToList(retryPayload['nature_code']);
+      await client.from('receipt_print_logs').insert(retryPayload);
+    }
   }
 }

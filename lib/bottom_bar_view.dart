@@ -29,6 +29,7 @@ class _BottomBarViewState extends State<BottomBarView>
   late final AnimationController _animationController;
 
   Color get _actionColor => widget.themeColor ?? AppTheme.nearlyDarkBlue;
+  Color get _actionForegroundColor => _onColorFor(_actionColor);
 
   @override
   void initState() {
@@ -170,13 +171,14 @@ class _BottomBarViewState extends State<BottomBarView>
                         child: Material(
                           color: Colors.transparent,
                           child: InkWell(
-                            splashColor: Colors.white.withValues(alpha: 0.1),
+                            splashColor:
+                                _actionForegroundColor.withValues(alpha: 0.14),
                             highlightColor: Colors.transparent,
                             focusColor: Colors.transparent,
-                          onTap: widget.addClick,
-                            child: const Icon(
+                            onTap: widget.addClick,
+                            child: Icon(
                               Icons.receipt_long,
-                              color: AppTheme.white,
+                              color: _actionForegroundColor,
                               size: 30,
                             ),
                           ),
@@ -284,7 +286,9 @@ class _TabIconsState extends State<TabIcons> with TickerProviderStateMixin {
       return const SizedBox.shrink();
     }
 
-    final dotColor = widget.activeColor ?? AppTheme.nearlyDarkBlue;
+    final dotColor = _readableAccentOnWhite(
+      widget.activeColor ?? AppTheme.nearlyDarkBlue,
+    );
     return Center(
       child: InkWell(
         splashColor: Colors.transparent,
@@ -487,4 +491,19 @@ Color _lighter(Color color, double amount) {
   final hsl = HSLColor.fromColor(color);
   final adjusted = hsl.withLightness((hsl.lightness + amount).clamp(0.0, 1.0));
   return adjusted.toColor();
+}
+
+Color _onColorFor(Color background) {
+  return background.computeLuminance() > 0.62 ? Colors.black87 : Colors.white;
+}
+
+Color _readableAccentOnWhite(Color color) {
+  if (color.computeLuminance() <= 0.55) {
+    return color;
+  }
+  final hsl = HSLColor.fromColor(color);
+  return hsl
+      .withSaturation((hsl.saturation + 0.10).clamp(0.0, 1.0))
+      .withLightness(0.30)
+      .toColor();
 }

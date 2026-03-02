@@ -139,6 +139,10 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen>
     return base.withSaturation(0.78).withLightness(0.64).toColor();
   }
 
+  Color _onColorFor(Color background) {
+    return background.computeLuminance() > 0.62 ? Colors.black87 : Colors.white;
+  }
+
   String _iconForCategory(String category) {
     final v = category.toLowerCase().trim();
     if (v.contains('slaughter') || v.contains('katayan')) {
@@ -247,6 +251,10 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen>
         final titleSize = isNarrow ? 22.0 : 28.0;
         final subtitleSize = isNarrow ? 14.0 : 16.0;
         final buttonHeight = isNarrow ? 54.0 : 60.0;
+        final continueButtonColor = _categories.isEmpty
+            ? const Color(0xFF1E3A5F)
+            : _categories[_currentPage]['primaryColor'] as Color;
+        final continueTextColor = _onColorFor(continueButtonColor);
         final cardWidth = isNarrow
             ? (screenW - (horizontalPadding * 2) - 28).clamp(220.0, 360.0)
             : 320.0;
@@ -343,9 +351,7 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen>
                     onPressed:
                         _selectedCategory != null ? _navigateToDashboard : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _categories.isEmpty
-                          ? const Color(0xFF1E3A5F)
-                          : _categories[_currentPage]['primaryColor'],
+                      backgroundColor: continueButtonColor,
                       padding: const EdgeInsets.symmetric(
                           vertical: 14, horizontal: 24),
                       shape: RoundedRectangleBorder(
@@ -357,7 +363,7 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen>
                       'Continue to Dashboard',
                       style: TextStyle(
                         fontSize: isNarrow ? 16 : 18,
-                        color: Colors.white,
+                        color: continueTextColor,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
