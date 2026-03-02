@@ -59,6 +59,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
 
   final int rowCount = 9;
   final List<String?> natures = List<String?>.filled(9, null);
+  final List<DateTime?> _natureStartDates = List<DateTime?>.filled(9, null);
   final List<TextEditingController> accountCtrls =
       List.generate(9, (_) => TextEditingController());
   final List<TextEditingController> amountCtrls =
@@ -195,6 +196,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
 
     for (int i = 0; i < rowCount; i++) {
       natures[i] = null;
+      _natureStartDates[i] = null;
       accountCtrls[i].clear();
       amountCtrls[i].clear();
     }
@@ -208,6 +210,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           final amount =
               item['price'] ?? item['amount'] ?? item['collection_price'];
           natures[i] = nature?.toString();
+          _natureStartDates[i] = _parseStartDate(item['start_date']);
           accountCtrls[i].text = item['account_code']?.toString() ?? '';
           amountCtrls[i].text = amount != null ? amount.toString() : '';
         }
@@ -220,6 +223,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           receipt['total_amount'];
       if (fallbackNature != null && fallbackNature.trim().isNotEmpty) {
         natures[0] = fallbackNature.trim();
+        _natureStartDates[0] = _parseStartDate(receipt['permit_start_date']);
         amountCtrls[0].text =
             fallbackAmount != null ? fallbackAmount.toString() : '';
       }
@@ -242,6 +246,9 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     if (key.isEmpty) return;
     _categoryDrafts[key] = _CategoryDraft(
       natures: List<String?>.from(natures),
+      natureStartDates: _natureStartDates
+          .map((d) => d == null ? null : d.toIso8601String())
+          .toList(),
       accountCodes: accountCtrls.map((c) => c.text).toList(),
       amounts: amountCtrls.map((c) => c.text).toList(),
       marineFlow: selectedMarineFlow,
@@ -261,6 +268,9 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
 
     for (int i = 0; i < rowCount; i++) {
       natures[i] = i < draft.natures.length ? draft.natures[i] : null;
+      _natureStartDates[i] = i < draft.natureStartDates.length
+          ? _parseStartDate(draft.natureStartDates[i])
+          : null;
       accountCtrls[i].text =
           i < draft.accountCodes.length ? draft.accountCodes[i] : '';
       amountCtrls[i].text = i < draft.amounts.length ? draft.amounts[i] : '';
@@ -782,13 +792,19 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
 
   Widget _natureDropdown(int i, double height) {
     if (widget.readOnly) {
+      final displayText = _displayNatureTextForRow(i);
+      final isDateRow = _isStartDateDisplayRow(i);
       return SizedBox(
         height: height,
         child: Align(
           alignment: Alignment.centerLeft,
           child: Text(
-            natures[i] ?? '',
-            style: const TextStyle(fontSize: 11),
+            displayText,
+            style: TextStyle(
+              fontSize: 11,
+              color: isDateRow ? Colors.black54 : Colors.black,
+              fontStyle: isDateRow ? FontStyle.italic : FontStyle.normal,
+            ),
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -812,6 +828,23 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
         ),
       );
     }
+    if (_isStartDateDisplayRow(i)) {
+      return SizedBox(
+        height: height,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            _displayNatureTextForRow(i),
+            style: const TextStyle(
+              fontSize: 10,
+              color: Colors.black54,
+              fontStyle: FontStyle.italic,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      );
+    }
     return InkWell(
       onTap: () async {
         final selected = await _showNatureSearchDialog();
@@ -823,6 +856,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
         if (selectedName == null || selectedName.isEmpty) {
           setState(() {
             natures[i] = null;
+            _natureStartDates[i] = null;
           });
           amountCtrls[i].clear();
           _saveDraftForCurrentCategory();
@@ -836,7 +870,21 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           if (selectedCode.isNotEmpty) {
             accountCtrls[i].text = selectedCode;
           }
+          if (!_requiresStartDateForBusinessPermit()) {
+            _natureStartDates[i] = null;
+          }
         });
+
+        if (_requiresStartDateForBusinessPermit()) {
+          final picked = await _showBusinessPermitStartDatePopup(
+            initialDate: _natureStartDates[i] ?? DateTime.now(),
+          );
+          if (picked != null && mounted) {
+            setState(() {
+              _natureStartDates[i] = picked;
+            });
+          }
+        }
         _saveDraftForCurrentCategory();
         double amount = (selected['amount'] as num?)?.toDouble() ?? 0.0;
         if (amount <= 0) {
@@ -870,6 +918,62 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  bool _requiresStartDateForBusinessPermit() {
+    final v = selectedCategory.toLowerCase().trim();
+    return v == 'business permit fees' || v.contains('business permit');
+  }
+
+  DateTime? _parseStartDate(dynamic value) {
+    if (value == null) return null;
+    final text = value.toString().trim();
+    if (text.isEmpty) return null;
+    return DateTime.tryParse(text);
+  }
+
+  String _formatStartDateDisplay(DateTime date) {
+    final mm = date.month.toString().padLeft(2, '0');
+    final dd = date.day.toString().padLeft(2, '0');
+    final yyyy = date.year.toString();
+    return 'Start Date: $mm/$dd/$yyyy';
+  }
+
+  String? _natureLine2(int index) {
+    final date = _natureStartDates[index];
+    if (date == null) return null;
+    return _formatStartDateDisplay(date);
+  }
+
+  bool _isStartDateDisplayRow(int index) {
+    if (index <= 0 || index >= rowCount) return false;
+    if ((natures[index] ?? '').trim().isNotEmpty) return false;
+    return _natureLine2(index - 1) != null;
+  }
+
+  String _displayNatureTextForRow(int index) {
+    final value = (natures[index] ?? '').trim();
+    if (value.isNotEmpty) return value;
+    if (_isStartDateDisplayRow(index)) {
+      return _natureLine2(index - 1) ?? '';
+    }
+    return '';
+  }
+
+  Future<DateTime?> _showBusinessPermitStartDatePopup({
+    required DateTime initialDate,
+  }) async {
+    final now = DateTime.now();
+    final firstDate = DateTime(now.year - 10, 1, 1);
+    final lastDate = DateTime(now.year + 20, 12, 31);
+    return showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      helpText: 'Select Start Date',
+      fieldLabelText: 'Start Date',
     );
   }
 
@@ -1095,6 +1199,8 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       }
       items.add({
         'nature': nature,
+        'nature_line2': _natureLine2(i),
+        'start_date': _natureStartDates[i]?.toIso8601String(),
         'account_code': accountCode,
         'nature_code': resolvedNatureCode,
         'price': amount,
@@ -1668,6 +1774,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
 
       for (int i = 0; i < rowCount; i++) {
         natures[i] = null;
+        _natureStartDates[i] = null;
         accountCtrls[i].clear();
         amountCtrls[i].clear();
       }
@@ -2767,12 +2874,14 @@ class _LinesPainter extends CustomPainter {
 class _CategoryDraft {
   _CategoryDraft({
     required this.natures,
+    required this.natureStartDates,
     required this.accountCodes,
     required this.amounts,
     required this.marineFlow,
   });
 
   final List<String?> natures;
+  final List<String?> natureStartDates;
   final List<String> accountCodes;
   final List<String> amounts;
   final String marineFlow;

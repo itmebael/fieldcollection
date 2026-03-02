@@ -395,6 +395,7 @@ class _AdminUserManagementScreenState extends State<AdminUserManagementScreen> {
             ),
             const SizedBox(width: 8),
             Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Chip(
@@ -402,30 +403,46 @@ class _AdminUserManagementScreenState extends State<AdminUserManagementScreen> {
                   backgroundColor:
                       active ? Colors.green.shade100 : Colors.red.shade100,
                 ),
-                IconButton(
+                _buildCompactActionIcon(
                   tooltip: 'Assign serial range',
                   onPressed: () => _showAssignSerialRangeDialog(user),
-                  icon: const Icon(Icons.pin),
+                  icon: const Icon(Icons.pin, size: 20),
                 ),
                 if (isStaff)
-                  IconButton(
+                  _buildCompactActionIcon(
                     tooltip: 'Upload profile picture',
                     onPressed: isUploadingAvatar
                         ? null
                         : () => _uploadStaffProfilePicture(user),
                     icon: isUploadingAvatar
                         ? const SizedBox(
-                            width: 18,
-                            height: 18,
+                            width: 16,
+                            height: 16,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.photo_camera_outlined),
+                        : const Icon(Icons.photo_camera_outlined, size: 20),
                   ),
               ],
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildCompactActionIcon({
+    required String tooltip,
+    required VoidCallback? onPressed,
+    required Widget icon,
+  }) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: icon,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+      visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+      splashRadius: 18,
     );
   }
 
