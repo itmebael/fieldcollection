@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "installCommand": "echo Skipping install",
-  "buildCommand": "echo Using prebuilt web output",
+  "installCommand": "echo Flutter build handled in vercel_build.sh",
+  "buildCommand": "sh ./vercel_build.sh",
   "outputDirectory": "build/web",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
