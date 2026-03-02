@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AdminUserManagementScreen extends StatefulWidget {
@@ -23,6 +24,7 @@ class _AdminUserManagementScreenState extends State<AdminUserManagementScreen> {
   bool _emailConfirm = true;
   bool _isCreating = false;
   bool _isLoadingUsers = false;
+  String? _uploadingAvatarUserId;
   List<Map<String, dynamic>> _users = [];
 
   @override
@@ -247,6 +249,56 @@ class _AdminUserManagementScreenState extends State<AdminUserManagementScreen> {
     }
   }
 
+  Future<void> _uploadStaffProfilePicture(Map<String, dynamic> user) async {
+    final userId = (user['id'] ?? '').toString().trim();
+    if (userId.isEmpty) return;
+
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    final file = picked.files.first;
+    final bytes = file.bytes;
+    if (bytes == null) return;
+
+    if (!mounted) return;
+    setState(() => _uploadingAvatarUserId = userId);
+
+    try {
+      final fileName = file.name;
+      final ext = fileName.contains('.') ? fileName.split('.').last : 'png';
+      final avatarPath =
+          '$userId/avatar_${DateTime.now().millisecondsSinceEpoch}.$ext';
+
+      await Supabase.instance.client.storage.from('profile-pictures').uploadBinary(
+            avatarPath,
+            bytes,
+            fileOptions: const FileOptions(upsert: true),
+          );
+
+      await Supabase.instance.client.from('user_profiles').update({
+        'avatar_image_path': avatarPath,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', userId);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile picture updated.')),
+      );
+      await _loadUsers();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Upload failed: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _uploadingAvatarUserId = null);
+      }
+    }
+  }
+
   Widget _buildRecentAccountCard(Map<String, dynamic> user) {
     final email = (user['email'] ?? '').toString().trim();
     final fullName = (user['full_name'] ?? '').toString().trim();
@@ -256,6 +308,9 @@ class _AdminUserManagementScreenState extends State<AdminUserManagementScreen> {
     final serialEnd = user['serial_end_no'];
     final nextSerial = user['next_serial_no'];
     final hasRange = serialStart != null && serialEnd != null;
+    final isStaff = role.toLowerCase() == 'staff';
+    final userId = (user['id'] ?? '').toString();
+    final isUploadingAvatar = _uploadingAvatarUserId == userId;
 
     String rangeText = 'No serial range assigned';
     if (hasRange) {
@@ -352,6 +407,20 @@ class _AdminUserManagementScreenState extends State<AdminUserManagementScreen> {
                   onPressed: () => _showAssignSerialRangeDialog(user),
                   icon: const Icon(Icons.pin),
                 ),
+                if (isStaff)
+                  IconButton(
+                    tooltip: 'Upload profile picture',
+                    onPressed: isUploadingAvatar
+                        ? null
+                        : () => _uploadStaffProfilePicture(user),
+                    icon: isUploadingAvatar
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.photo_camera_outlined),
+                  ),
               ],
             ),
           ],
