@@ -541,7 +541,7 @@ class _AdminUserManagementScreenState extends State<AdminUserManagementScreen> {
                           controller: _passwordController,
                           obscureText: true,
                           decoration: const InputDecoration(
-                            labelText: 'Temporary Password',
+                            labelText: 'Password',
                             border: OutlineInputBorder(),
                           ),
                           validator: (value) {
