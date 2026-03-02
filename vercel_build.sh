@@ -1,6 +1,6 @@
 #!/bin/sh
 set -e
-FLUTTER_VERSION="3.41.2"
+FLUTTER_VERSION="3.29.2"
 git clone https://github.com/flutter/flutter.git --depth 1 --branch "$FLUTTER_VERSION"
 cd flutter
 cd ..
