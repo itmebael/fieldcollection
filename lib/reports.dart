@@ -67,6 +67,10 @@ class _RealReportContentState extends State<_RealReportContent> {
   String? endMonth;
   String _selectedCategoryFilter = 'All';
   bool _isExportingCategory = false;
+  final TextEditingController _natureSearchController = TextEditingController();
+  String _natureSearch = '';
+  int _natureSortColumnIndex = 2;
+  bool _natureSortAscending = false;
 
   @override
   void initState() {
@@ -74,24 +78,91 @@ class _RealReportContentState extends State<_RealReportContent> {
     _loadRows();
   }
 
+  @override
+  void dispose() {
+    _natureSearchController.dispose();
+    super.dispose();
+  }
+
+  double _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value.trim()) ?? 0.0;
+    return 0.0;
+  }
+
+  double _extractAmount(Map<String, dynamic> row) {
+    final direct = _asDouble(row['total_amount']);
+    if (direct > 0) return direct;
+    final price = _asDouble(row['price']);
+    if (price > 0) return price;
+    final collectionPrice = _asDouble(row['collection_price']);
+    if (collectionPrice > 0) return collectionPrice;
+
+    final items = row['collection_items'];
+    if (items is List) {
+      return items.fold<double>(0.0, (sum, item) {
+        if (item is Map<String, dynamic>) {
+          return sum + _asDouble(item['price']) + _asDouble(item['amount']);
+        }
+        if (item is Map) {
+          final typed = Map<String, dynamic>.from(item);
+          return sum + _asDouble(typed['price']) + _asDouble(typed['amount']);
+        }
+        return sum;
+      });
+    }
+    return 0.0;
+  }
+
+  String _extractDate(Map<String, dynamic> row) {
+    final printedAt = (row['printed_at'] ?? '').toString().trim();
+    if (printedAt.isNotEmpty) return printedAt;
+    final savedAt = (row['saved_at'] ?? '').toString().trim();
+    if (savedAt.isNotEmpty) return savedAt;
+    final createdAt = (row['created_at'] ?? '').toString().trim();
+    return createdAt;
+  }
+
   Future<void> _loadRows() async {
     if (!mounted) return;
     setState(() => isLoading = true);
     try {
-      final data = await Supabase.instance.client
-          .from('receipt_print_logs')
-          .select(
-            'id, serial_no, category, marine_flow, printed_at, receipt_date, payor, officer, total_amount, collection_items',
-          )
-          .order('printed_at', ascending: false);
+      final client = Supabase.instance.client;
+      List<Map<String, dynamic>> data = [];
+      try {
+        final logs = await client
+            .from('receipt_print_logs')
+            .select(
+              'id, serial_no, category, marine_flow, printed_at, receipt_date, payor, officer, total_amount, collection_items, nature_code, payment_method',
+            )
+            .order('printed_at', ascending: false);
+        data = List<Map<String, dynamic>>.from(logs);
+      } catch (_) {
+        data = [];
+      }
+
+      if (data.isEmpty) {
+        try {
+          final receipts = await client
+              .from('receipts')
+              .select('*')
+              .order('saved_at', ascending: false);
+          data = List<Map<String, dynamic>>.from(receipts);
+        } catch (_) {
+          data = [];
+        }
+      }
       if (!mounted) return;
 
       final rows = List<Map<String, dynamic>>.from(data).map((row) {
+        final normalizedDate = _extractDate(row);
         return <String, dynamic>{
           ...row,
           // Normalize print-log row keys for existing table/preview UI
-          'saved_at': row['printed_at'],
-          'price': row['total_amount'],
+          'saved_at': normalizedDate,
+          'printed_at': normalizedDate,
+          'price': _extractAmount(row),
+          'total_amount': _extractAmount(row),
           'nature_of_collection':
               _firstNatureFromItems(row['collection_items']),
         };
@@ -228,16 +299,194 @@ class _RealReportContentState extends State<_RealReportContent> {
     return {for (final e in sorted) e.key: e.value};
   }
 
-  Map<String, double> _incomeByNature() {
-    final totals = <String, double>{};
+  List<_CategoryNatureRow> _natureRowsByCategory() {
+    final grouped = <String, double>{};
+
     for (final row in filteredRows) {
-      final nature = (_firstNatureFromItems(row['collection_items']) ?? '-').trim();
-      final key = nature.isEmpty ? '-' : nature;
-      totals[key] = (totals[key] ?? 0.0) + _resolveAmount(row);
+      final rawCategory = (row['category'] ?? '').toString().trim();
+      final category = rawCategory.isEmpty ? 'Uncategorized' : rawCategory;
+      var hadItem = false;
+      final items = row['collection_items'];
+
+      if (items is List) {
+        for (final item in items) {
+          Map<String, dynamic>? m;
+          if (item is Map<String, dynamic>) {
+            m = item;
+          } else if (item is Map) {
+            m = Map<String, dynamic>.from(item);
+          }
+          if (m == null) continue;
+          final nature = (m['nature'] ?? m['nature_of_collection'] ?? '')
+              .toString()
+              .trim();
+          final amount = ((m['price'] as num?)?.toDouble() ?? 0.0) +
+              ((m['amount'] as num?)?.toDouble() ?? 0.0);
+          if (nature.isEmpty || amount <= 0) continue;
+          hadItem = true;
+          final key = '$category|||$nature';
+          grouped[key] = (grouped[key] ?? 0.0) + amount;
+        }
+      }
+
+      if (!hadItem) {
+        final fallbackNature = (row['nature_of_collection'] ?? '-').toString();
+        final amount = _resolveAmount(row);
+        if (amount > 0) {
+          final key = '$category|||$fallbackNature';
+          grouped[key] = (grouped[key] ?? 0.0) + amount;
+        }
+      }
     }
-    final sorted = totals.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    return {for (final e in sorted) e.key: e.value};
+
+    final rows = grouped.entries.map((entry) {
+      final parts = entry.key.split('|||');
+      final category = parts.isNotEmpty ? parts.first : 'Uncategorized';
+      final nature = parts.length > 1 ? parts[1] : '-';
+      return _CategoryNatureRow(
+        category: category,
+        nature: nature,
+        amount: entry.value,
+      );
+    }).toList();
+
+    return rows;
+  }
+
+  List<_CategoryNatureRow> _displayNatureRows(List<_CategoryNatureRow> source) {
+    final q = _natureSearch.trim().toLowerCase();
+    final filtered = q.isEmpty
+        ? List<_CategoryNatureRow>.from(source)
+        : source.where((row) {
+            return row.category.toLowerCase().contains(q) ||
+                row.nature.toLowerCase().contains(q);
+          }).toList();
+
+    filtered.sort((a, b) {
+      int cmp;
+      switch (_natureSortColumnIndex) {
+        case 0:
+          cmp = a.category.toLowerCase().compareTo(b.category.toLowerCase());
+          break;
+        case 1:
+          cmp = a.nature.toLowerCase().compareTo(b.nature.toLowerCase());
+          break;
+        case 2:
+        default:
+          cmp = a.amount.compareTo(b.amount);
+          break;
+      }
+      return _natureSortAscending ? cmp : -cmp;
+    });
+    return filtered;
+  }
+
+  Widget _buildNatureByCategoryTable(List<_CategoryNatureRow> rows) {
+    final displayRows = _displayNatureRows(rows);
+    if (displayRows.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Text(
+          'No matching rows.',
+          style: TextStyle(color: Colors.black54),
+        ),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFD6DEE8)),
+          color: Colors.white,
+        ),
+        child: SizedBox(
+          height: 300,
+          child: SingleChildScrollView(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columnSpacing: 34,
+                headingRowHeight: 46,
+                dataRowMinHeight: 44,
+                dataRowMaxHeight: 50,
+                sortColumnIndex: _natureSortColumnIndex,
+                sortAscending: _natureSortAscending,
+                headingRowColor:
+                    WidgetStateProperty.all(const Color(0xFFEAF1F8)),
+                columns: [
+                  DataColumn(
+                    onSort: (columnIndex, ascending) {
+                      setState(() {
+                        _natureSortColumnIndex = columnIndex;
+                        _natureSortAscending = ascending;
+                      });
+                    },
+                    label: const Text(
+                      'Category',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  DataColumn(
+                    onSort: (columnIndex, ascending) {
+                      setState(() {
+                        _natureSortColumnIndex = columnIndex;
+                        _natureSortAscending = ascending;
+                      });
+                    },
+                    label: const Text(
+                      'Nature of Collection',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  DataColumn(
+                    numeric: true,
+                    onSort: (columnIndex, ascending) {
+                      setState(() {
+                        _natureSortColumnIndex = columnIndex;
+                        _natureSortAscending = ascending;
+                      });
+                    },
+                    label: const Text(
+                      'Amount',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+                rows: List.generate(displayRows.length, (index) {
+                  final row = displayRows[index];
+                  final striped = index.isOdd;
+                  return DataRow.byIndex(
+                    index: index,
+                    color: WidgetStateProperty.all(
+                      striped ? const Color(0xFFF9FBFE) : Colors.white,
+                    ),
+                    cells: [
+                      DataCell(
+                        Text(
+                          row.category,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      DataCell(Text(row.nature)),
+                      DataCell(
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            'PHP ${row.amount.toStringAsFixed(2)}',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _exportCategoryDataCsv() async {
@@ -755,209 +1004,211 @@ class _RealReportContentState extends State<_RealReportContent> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _GlassPanel(
-          padding: EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Office of the Municipal Treasurer",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 4),
-              Text("Transaction Monitoring Report",
-                  style: TextStyle(fontSize: 14)),
-            ],
-          ),
-        ),
-        const SizedBox(height: 30),
-        _GlassPanel(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          child: Row(
-            children: [
-              Text(
-                LanguageService.translate("Filter by Month Range:"),
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(width: 20),
-              _monthDropdown(
-                value: startMonth,
-                hint: LanguageService.translate('Start Month'),
-                onChanged: (v) => setState(() => startMonth = v),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Text("-"),
-              ),
-              _monthDropdown(
-                value: endMonth,
-                hint: LanguageService.translate('End Month'),
-                onChanged: (v) => setState(() => endMonth = v),
-              ),
-              const SizedBox(width: 16),
-              Text(
-                LanguageService.translate("Category:"),
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(width: 10),
-              _monthDropdown(
-                value: _selectedCategoryFilter,
-                hint: 'Category',
-                onChanged: (v) {
-                  if (v == null) return;
-                  setState(() => _selectedCategoryFilter = v);
-                },
-                itemsOverride: _categoryOptions,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 25),
-        _GlassPanel(
-          padding: const EdgeInsets.all(16),
-          child: Builder(
-            builder: (context) {
-              final incomeByCategory = _incomeByCategory();
-              final incomeByNature = _incomeByNature();
-              if (incomeByCategory.isEmpty && incomeByNature.isEmpty) {
-                return const Text(
-                  'No income data for selected filters.',
-                  style: TextStyle(color: Colors.black54),
-                );
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Income by Category',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed:
-                            _isExportingCategory ? null : _exportCategoryDataCsv,
-                        icon: _isExportingCategory
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.download, size: 18),
-                        label: Text(
-                          _isExportingCategory
-                              ? 'Exporting...'
-                              : 'Export Category Data',
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  if (_selectedCategoryFilter == 'All') ...[
-                    ...incomeByCategory.entries.map(
-                      (entry) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 3),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                entry.key,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                            Text(
-                              'PHP ${entry.value.toStringAsFixed(2)}',
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ] else ...[
-                    Text(
-                      'Nature of Collection ($_selectedCategoryFilter)',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ...incomeByNature.entries.map(
-                      (entry) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 3),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                entry.key,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                            Text(
-                              'PHP ${entry.value.toStringAsFixed(2)}',
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 16),
-        Row(
+    final mainChildren = <Widget>[
+      const _GlassPanel(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Text(
-                LanguageService.translate("Recent Transactions"),
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-              ),
+            Text(
+              "Office of the Municipal Treasurer",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
-            ElevatedButton.icon(
-              onPressed: (isLoading || isPrintingAll || filteredRows.isEmpty)
-                  ? null
-                  : _showPrintAllPreview,
-              icon: isPrintingAll
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.print),
-              label: Text(
-                isPrintingAll
-                    ? LanguageService.translate('Printing...')
-                    : LanguageService.translate('Print All Receipts'),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E3A5F),
-                foregroundColor: Colors.white,
-              ),
+            SizedBox(height: 4),
+            Text("Transaction Monitoring Report", style: TextStyle(fontSize: 14)),
+          ],
+        ),
+      ),
+      const SizedBox(height: 30),
+      _GlassPanel(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        child: Wrap(
+          spacing: 12,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              LanguageService.translate("Filter by Month Range:"),
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            _monthDropdown(
+              value: startMonth,
+              hint: LanguageService.translate('Start Month'),
+              onChanged: (v) => setState(() => startMonth = v),
+            ),
+            const Text("-"),
+            _monthDropdown(
+              value: endMonth,
+              hint: LanguageService.translate('End Month'),
+              onChanged: (v) => setState(() => endMonth = v),
+            ),
+            Text(
+              LanguageService.translate("Category:"),
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            _monthDropdown(
+              value: _selectedCategoryFilter,
+              hint: 'Category',
+              onChanged: (v) {
+                if (v == null) return;
+                setState(() => _selectedCategoryFilter = v);
+              },
+              itemsOverride: _categoryOptions,
             ),
           ],
         ),
-        const SizedBox(height: 15),
-        Expanded(
-          child: isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _RealReportTable(filteredRows),
+      ),
+      const SizedBox(height: 25),
+      _GlassPanel(
+        padding: const EdgeInsets.all(16),
+        child: Builder(
+          builder: (context) {
+            final incomeByCategory = _incomeByCategory();
+            final natureRows = _natureRowsByCategory();
+            if (incomeByCategory.isEmpty && natureRows.isEmpty) {
+              return const Text(
+                'No income data for selected filters.',
+                style: TextStyle(color: Colors.black54),
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    const Text(
+                      'Income by Category',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed:
+                          _isExportingCategory ? null : _exportCategoryDataCsv,
+                      icon: _isExportingCategory
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.download, size: 18),
+                      label: Text(
+                        _isExportingCategory
+                            ? 'Exporting...'
+                            : 'Export Category Data',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _natureSearchController,
+                  onChanged: (value) {
+                    setState(() => _natureSearch = value);
+                  },
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    hintText: 'Search category or nature',
+                    isDense: true,
+                    filled: true,
+                    fillColor: const Color(0xFFF7FAFE),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFD6DEE8)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFD6DEE8)),
+                    ),
+                    suffixIcon: _natureSearch.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear',
+                            onPressed: () {
+                              _natureSearchController.clear();
+                              setState(() => _natureSearch = '');
+                            },
+                            icon: const Icon(Icons.close, size: 18),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _buildNatureByCategoryTable(natureRows),
+              ],
+            );
+          },
         ),
-      ],
+      ),
+      const SizedBox(height: 16),
+      Row(
+        children: [
+          Expanded(
+            child: Text(
+              LanguageService.translate("Recent Transactions"),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: (isLoading || isPrintingAll || filteredRows.isEmpty)
+                ? null
+                : _showPrintAllPreview,
+            icon: isPrintingAll
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.print),
+            label: Text(
+              isPrintingAll
+                  ? LanguageService.translate('Printing...')
+                  : LanguageService.translate('Print All Receipts'),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1E3A5F),
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 15),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compactHeight = constraints.maxHeight < 900;
+        if (compactHeight) {
+          return SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ...mainChildren,
+                SizedBox(
+                  height: 360,
+                  child: isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _RealReportTable(filteredRows),
+                ),
+              ],
+            ),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ...mainChildren,
+            Expanded(
+              child: isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _RealReportTable(filteredRows),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -998,6 +1249,18 @@ class _RealReportContentState extends State<_RealReportContent> {
     }
     return null;
   }
+}
+
+class _CategoryNatureRow {
+  final String category;
+  final String nature;
+  final double amount;
+
+  const _CategoryNatureRow({
+    required this.category,
+    required this.nature,
+    required this.amount,
+  });
 }
 
 class _RealReportTable extends StatelessWidget {
@@ -1042,63 +1305,65 @@ class _RealReportTable extends StatelessWidget {
   Widget build(BuildContext context) {
     return _GlassPanel(
       child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          columnSpacing: 30,
-          headingRowColor: WidgetStateProperty.all(const Color(0xFFEAF1F8)),
-          columns: const [
-            DataColumn(label: Text("Petsa")),
-            DataColumn(label: Text("Kategorya")),
-            DataColumn(label: Text("Reference No.")),
-            DataColumn(label: Text("Nature")),
-            DataColumn(label: Text("Marine Flow")),
-            DataColumn(label: Text("Halaga")),
-            DataColumn(label: Text("Receipt")),
-          ],
-          rows: rows.map((row) {
-            final dt = DateTime.tryParse((row['saved_at'] ?? '').toString());
-            final dateText = dt == null
-                ? "-"
-                : "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
-            final amount = _resolveAmount(row);
-            final serialNo = row['serial_no']?.toString().trim();
-            return DataRow(
-              cells: [
-                DataCell(Text(dateText)),
-                DataCell(Text((row['category'] ?? '-').toString())),
-                DataCell(Text(serialNo?.isNotEmpty == true
-                    ? serialNo!
-                    : "REC-${row['id'] ?? '-'}")),
-                DataCell(Text(_resolveNature(row))),
-                DataCell(Text((row['marine_flow'] ?? '-').toString())),
-                DataCell(Text(
-                  "PHP ${amount.toStringAsFixed(2)}",
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                )),
-                DataCell(
-                  TextButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ReceiptScreen(
-                            receiptData: row,
-                            readOnly: true,
-                            showSaveButton: false,
-                            showViewReceiptsButton: false,
-                            showPrintButton: false,
-                            useFullWidth: true,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            columnSpacing: 30,
+            headingRowColor: WidgetStateProperty.all(const Color(0xFFEAF1F8)),
+            columns: const [
+              DataColumn(label: Text("Petsa")),
+              DataColumn(label: Text("Kategorya")),
+              DataColumn(label: Text("Reference No.")),
+              DataColumn(label: Text("Nature")),
+              DataColumn(label: Text("Marine Flow")),
+              DataColumn(label: Text("Halaga")),
+              DataColumn(label: Text("Receipt")),
+            ],
+            rows: rows.map((row) {
+              final dt = DateTime.tryParse((row['saved_at'] ?? '').toString());
+              final dateText = dt == null
+                  ? "-"
+                  : "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
+              final amount = _resolveAmount(row);
+              final serialNo = row['serial_no']?.toString().trim();
+              return DataRow(
+                cells: [
+                  DataCell(Text(dateText)),
+                  DataCell(Text((row['category'] ?? '-').toString())),
+                  DataCell(Text(serialNo?.isNotEmpty == true
+                      ? serialNo!
+                      : "REC-${row['id'] ?? '-'}")),
+                  DataCell(Text(_resolveNature(row))),
+                  DataCell(Text((row['marine_flow'] ?? '-').toString())),
+                  DataCell(Text(
+                    "PHP ${amount.toStringAsFixed(2)}",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  )),
+                  DataCell(
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ReceiptScreen(
+                              receiptData: row,
+                              readOnly: true,
+                              showSaveButton: false,
+                              showViewReceiptsButton: false,
+                              showPrintButton: false,
+                              useFullWidth: true,
+                            ),
                           ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.visibility, size: 16),
-                    label: const Text("View"),
+                        );
+                      },
+                      icon: const Icon(Icons.visibility, size: 16),
+                      label: const Text("View"),
+                    ),
                   ),
-                ),
-              ],
-            );
-          }).toList(),
+                ],
+              );
+            }).toList(),
+          ),
         ),
       ),
     );

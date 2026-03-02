@@ -11,7 +11,6 @@ import 'login.dart';
 import 'session_service.dart';
 import 'nature_management.dart';
 import 'admin_user_management.dart';
-import 'nature_catalog_data.dart';
 
 const Color _navy900 = Color(0xFF0A1F33);
 const Color _navy800 = Color(0xFF102A46);
@@ -263,11 +262,16 @@ class _DashboardContentState extends State<DashboardContent>
   bool _isLoading = false;
   List<Map<String, dynamic>> _entries = [];
   String _selectedRange = 'Daily';
+  String _selectedCategory = 'All';
+  String _selectedPeriodType = 'All';
+  String _selectedMonthKey = 'All';
+  String _selectedDateKey = 'All';
   Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
+    _selectedCategory = _normalizeCategory(widget.selectedCategory);
     WidgetsBinding.instance.addObserver(this);
     _loadDashboardEntries();
     _refreshTimer = Timer.periodic(const Duration(seconds: 20), (_) {
@@ -285,26 +289,215 @@ class _DashboardContentState extends State<DashboardContent>
   }
 
   @override
+  void didUpdateWidget(covariant DashboardContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedCategory != widget.selectedCategory) {
+      setState(() {
+        _selectedCategory = _normalizeCategory(widget.selectedCategory);
+      });
+    }
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
     super.dispose();
   }
 
+  String _normalizeCategory(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) return 'All';
+    return normalized;
+  }
+
+  String _monthKey(DateTime dt) =>
+      '${dt.year}-${dt.month.toString().padLeft(2, '0')}';
+
+  String _dateKey(DateTime dt) =>
+      '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+
+  String _monthLabelFromKey(String key) {
+    if (key == 'All') return 'All Months';
+    final parts = key.split('-');
+    if (parts.length != 2) return key;
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    if (year == null || month == null || month < 1 || month > 12) return key;
+    const names = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return '${names[month - 1]} $year';
+  }
+
+  List<String> get _monthOptions {
+    final keys = <String>{};
+    for (final row in _entries) {
+      final dt = DateTime.tryParse((row['printed_at'] ?? '').toString());
+      if (dt != null) {
+        keys.add(_monthKey(dt));
+      }
+    }
+    final list = keys.toList()..sort((a, b) => b.compareTo(a));
+    return ['All', ...list];
+  }
+
+  List<String> get _dateOptions {
+    final keys = <String>{};
+    for (final row in _entries) {
+      final dt = DateTime.tryParse((row['printed_at'] ?? '').toString());
+      if (dt != null) {
+        keys.add(_dateKey(dt));
+      }
+    }
+    final list = keys.toList()..sort((a, b) => b.compareTo(a));
+    return ['All', ...list];
+  }
+
+  double _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value.trim()) ?? 0.0;
+    return 0.0;
+  }
+
+  double _extractAmount(Map<String, dynamic> row) {
+    final direct = _asDouble(row['total_amount']);
+    if (direct > 0) return direct;
+
+    final price = _asDouble(row['price']);
+    if (price > 0) return price;
+
+    final collectionPrice = _asDouble(row['collection_price']);
+    if (collectionPrice > 0) return collectionPrice;
+
+    final rawItems = row['collection_items'];
+    if (rawItems is List) {
+      return rawItems.fold<double>(0.0, (sum, item) {
+        if (item is Map<String, dynamic>) {
+          return sum + _asDouble(item['price']) + _asDouble(item['amount']);
+        }
+        if (item is Map) {
+          final typed = Map<String, dynamic>.from(item);
+          return sum + _asDouble(typed['price']) + _asDouble(typed['amount']);
+        }
+        return sum;
+      });
+    }
+    return 0.0;
+  }
+
+  String _extractDate(Map<String, dynamic> row) {
+    final printedAt = (row['printed_at'] ?? '').toString().trim();
+    if (printedAt.isNotEmpty) return printedAt;
+    final savedAt = (row['saved_at'] ?? '').toString().trim();
+    if (savedAt.isNotEmpty) return savedAt;
+    final createdAt = (row['created_at'] ?? '').toString().trim();
+    return createdAt;
+  }
+
+  DateTime _referenceDate() {
+    if (_selectedPeriodType == 'Date' && _selectedDateKey != 'All') {
+      final dt = DateTime.tryParse(_selectedDateKey);
+      if (dt != null) return dt;
+    }
+    if (_selectedPeriodType == 'Month' && _selectedMonthKey != 'All') {
+      final parts = _selectedMonthKey.split('-');
+      if (parts.length == 2) {
+        final year = int.tryParse(parts[0]);
+        final month = int.tryParse(parts[1]);
+        if (year != null && month != null && month >= 1 && month <= 12) {
+          return DateTime(year, month, 1);
+        }
+      }
+    }
+    return DateTime.now();
+  }
+
+  List<String> get _categoryOptions {
+    final set = <String>{'All'};
+    for (final row in _entries) {
+      final category = (row['category'] ?? '').toString().trim();
+      if (category.isNotEmpty) {
+        set.add(category);
+      }
+    }
+    if (_selectedCategory.trim().isNotEmpty) {
+      set.add(_selectedCategory.trim());
+    }
+    final list = set.toList();
+    if (list.length <= 1) return list;
+    final body = list.where((e) => e != 'All').toList()..sort();
+    return ['All', ...body];
+  }
+
   Future<void> _loadDashboardEntries() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      final data = await Supabase.instance.client
-          .from('receipt_print_logs')
-          .select('category, total_amount, printed_at');
+      final rows = <Map<String, dynamic>>[];
+      final client = Supabase.instance.client;
+
+      try {
+        final printLogs = await client
+            .from('receipt_print_logs')
+            .select(
+              'category, total_amount, printed_at, collection_items, nature_code, payment_method',
+            )
+            .order('printed_at', ascending: false);
+        for (final item in List<Map<String, dynamic>>.from(printLogs)) {
+          final printedAt = _extractDate(item);
+          if (DateTime.tryParse(printedAt) == null) continue;
+          rows.add({
+            'category': (item['category'] ?? '').toString().trim(),
+            'total_amount': _extractAmount(item),
+            'printed_at': printedAt,
+            'collection_items': item['collection_items'],
+            'nature_of_collection': item['nature_of_collection'],
+            'nature_code': item['nature_code'],
+            'payment_method': item['payment_method'],
+          });
+        }
+      } catch (_) {
+        // Fall back to receipts when print-log table is unavailable or blocked.
+      }
+
+      if (rows.isEmpty) {
+        try {
+          final receipts = await client
+              .from('receipts')
+              .select('*')
+              .order('saved_at', ascending: false);
+          for (final item in List<Map<String, dynamic>>.from(receipts)) {
+            final printedAt = _extractDate(item);
+            if (DateTime.tryParse(printedAt) == null) continue;
+            rows.add({
+              'category': (item['category'] ?? '').toString().trim(),
+              'total_amount': _extractAmount(item),
+              'printed_at': printedAt,
+              'collection_items': item['collection_items'],
+              'nature_of_collection': item['nature_of_collection'],
+              'nature_code': item['nature_code'],
+              'payment_method': item['payment_method'],
+            });
+          }
+        } catch (_) {
+          // Keep rows empty if fallback source also fails.
+        }
+      }
+
       if (!mounted) return;
-      setState(() {
-        _entries = List<Map<String, dynamic>>.from(data);
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _entries = []);
+      setState(() => _entries = rows);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -339,7 +532,7 @@ class _DashboardContentState extends State<DashboardContent>
   }
 
   _LineSeries _lineSeries(String category) {
-    final now = DateTime.now();
+    final now = _referenceDate();
     final entries = _filteredEntries();
     final spots = <FlSpot>[];
     final labels = <String>[];
@@ -393,17 +586,20 @@ class _DashboardContentState extends State<DashboardContent>
   }
 
   _BarSeries _barSeries(String category) {
-    final now = DateTime.now();
+    final now = _referenceDate();
     final groups = <BarChartGroupData>[];
     final labels = <String>[];
     final entries = _filteredEntries();
+    final categoryColor = category.trim().toLowerCase() == 'all'
+        ? null
+        : _categoryColor(category, 0);
 
     if (_selectedRange == 'Daily') {
       for (int h = 0; h < 24; h++) {
         final start = DateTime(now.year, now.month, now.day, h);
         final end = start.add(const Duration(hours: 1));
         final sum = _sumForWindow(entries, start, end, category);
-        groups.add(_barGroup(h, sum));
+        groups.add(_barGroup(h, sum, primary: categoryColor));
         labels.add(h.toString());
       }
       return _BarSeries(groups, labels, 4);
@@ -417,7 +613,7 @@ class _DashboardContentState extends State<DashboardContent>
         final end = start.add(const Duration(days: 1));
         final sum = _sumForWindow(entries, start, end, category);
         final x = 6 - i;
-        groups.add(_barGroup(x, sum));
+        groups.add(_barGroup(x, sum, primary: categoryColor));
         labels.add(weekdays[day.weekday - 1]);
       }
       return _BarSeries(groups, labels, 1);
@@ -442,13 +638,16 @@ class _DashboardContentState extends State<DashboardContent>
       final end = DateTime(now.year, m + 1, 1);
       final sum = _sumForWindow(entries, start, end, category);
       final x = m - 1;
-      groups.add(_barGroup(x, sum));
+      groups.add(_barGroup(x, sum, primary: categoryColor));
       labels.add(months[m - 1]);
     }
     return _BarSeries(groups, labels, 1);
   }
 
-  BarChartGroupData _barGroup(int x, double sum) {
+  BarChartGroupData _barGroup(int x, double sum, {Color? primary}) {
+    final base = primary ?? _cyan500;
+    final hsl = HSLColor.fromColor(base);
+    final top = hsl.withLightness((hsl.lightness + 0.14).clamp(0.0, 1.0)).toColor();
     return BarChartGroupData(
       x: x,
       barsSpace: -8,
@@ -456,14 +655,14 @@ class _DashboardContentState extends State<DashboardContent>
         BarChartRodData(
           toY: (sum * 0.9).clamp(0, double.infinity),
           width: 16,
-          color: _navy700.withValues(alpha: 0.18),
+          color: base.withValues(alpha: 0.20),
           borderRadius: BorderRadius.circular(8),
         ),
         BarChartRodData(
           toY: sum,
           width: 12,
-          gradient: const LinearGradient(
-            colors: [_navy700, _cyan500],
+          gradient: LinearGradient(
+            colors: [top, base],
             begin: Alignment.bottomCenter,
             end: Alignment.topCenter,
           ),
@@ -536,15 +735,40 @@ class _DashboardContentState extends State<DashboardContent>
     return _BarSeries(groups, labels, 1);
   }
 
-  List<_TopNature> _topNatureByCategoryFromCatalog() {
+  List<_TopNature> _topNatureByCategoryFromEntries() {
     final grouped = <String, Map<String, double>>{};
-    for (final row in NatureCatalogData.rows) {
+    for (final row in _filteredEntries()) {
       final category = (row['category'] ?? '').toString().trim();
-      final nature = (row['nature_of_collection'] ?? '').toString().trim();
-      final amount = (row['amount'] as num?)?.toDouble() ?? 0.0;
-      if (category.isEmpty || nature.isEmpty || amount <= 0) continue;
       final byNature = grouped.putIfAbsent(category, () => <String, double>{});
-      byNature[nature] = (byNature[nature] ?? 0.0) + amount;
+      if (category.isEmpty) continue;
+
+      final items = row['collection_items'];
+      if (items is List && items.isNotEmpty) {
+        for (final item in items) {
+          Map<String, dynamic>? map;
+          if (item is Map<String, dynamic>) {
+            map = item;
+          } else if (item is Map) {
+            map = Map<String, dynamic>.from(item);
+          }
+          if (map == null) continue;
+          final nature = (map['nature'] ?? map['nature_of_collection'] ?? '')
+              .toString()
+              .trim();
+          final amount = _asDouble(map['price']) + _asDouble(map['amount']);
+          if (nature.isEmpty || amount <= 0) continue;
+          byNature[nature] = (byNature[nature] ?? 0.0) + amount;
+        }
+        continue;
+      }
+
+      final fallbackNature =
+          (row['nature_of_collection'] ?? '').toString().trim();
+      final fallbackAmount = _extractAmount(row);
+      if (fallbackNature.isNotEmpty && fallbackAmount > 0) {
+        byNature[fallbackNature] =
+            (byNature[fallbackNature] ?? 0.0) + fallbackAmount;
+      }
     }
 
     final result = <_TopNature>[];
@@ -568,7 +792,9 @@ class _DashboardContentState extends State<DashboardContent>
     final groups = <BarChartGroupData>[];
     final labels = <String>[];
     for (var i = 0; i < rows.length; i++) {
-      groups.add(_barGroup(i, rows[i].amount));
+      groups.add(
+        _barGroup(i, rows[i].amount, primary: _categoryColor(rows[i].category, i)),
+      );
       final c = rows[i].category;
       labels.add(c.length > 10 ? '${c.substring(0, 10)}...' : c);
     }
@@ -697,10 +923,14 @@ class _DashboardContentState extends State<DashboardContent>
 
   List<Map<String, dynamic>> _filteredEntries() {
     if (_entries.isEmpty) return const [];
-    final now = DateTime.now();
-    final selectedCategory = widget.selectedCategory.trim().toLowerCase();
+    final now = _referenceDate();
+    final selectedCategory = _selectedCategory.trim().toLowerCase();
     final applyCategoryFilter =
         selectedCategory.isNotEmpty && selectedCategory != 'all';
+    final applyMonthFilter =
+        _selectedPeriodType == 'Month' && _selectedMonthKey != 'All';
+    final applyDateFilter =
+        _selectedPeriodType == 'Date' && _selectedDateKey != 'All';
     DateTime start;
     DateTime end;
     if (_selectedRange == 'Daily') {
@@ -716,7 +946,11 @@ class _DashboardContentState extends State<DashboardContent>
     return _entries.where((e) {
       final dt = DateTime.tryParse((e['printed_at'] ?? '').toString());
       if (dt == null) return false;
-      if (dt.isBefore(start) || !dt.isBefore(end)) return false;
+      if (!applyMonthFilter && !applyDateFilter) {
+        if (dt.isBefore(start) || !dt.isBefore(end)) return false;
+      }
+      if (applyMonthFilter && _monthKey(dt) != _selectedMonthKey) return false;
+      if (applyDateFilter && _dateKey(dt) != _selectedDateKey) return false;
       if (!applyCategoryFilter) return true;
       final rowCategory = (e['category'] ?? '').toString().trim().toLowerCase();
       return rowCategory == selectedCategory;
@@ -725,7 +959,7 @@ class _DashboardContentState extends State<DashboardContent>
 
   @override
   Widget build(BuildContext context) {
-    final selectedCategory = widget.selectedCategory.trim();
+    final selectedCategory = _selectedCategory.trim();
     final isAllCategory =
         selectedCategory.isEmpty || selectedCategory.toLowerCase() == 'all';
 
@@ -734,8 +968,7 @@ class _DashboardContentState extends State<DashboardContent>
     final selectedLine = _lineSeries(selectedToken);
     final selectedBars = _barSeries(selectedToken);
     final categoryTotals = _categoryTotals();
-    final categoryBars = _categoryBarSeries(categoryTotals);
-    final topNatures = _topNatureByCategoryFromCatalog();
+    final topNatures = _topNatureByCategoryFromEntries();
     final topNatureBars = _topNatureBarSeries(topNatures);
     final overallTotal =
         categoryTotals.values.fold<double>(0.0, (sum, value) => sum + value);
@@ -797,6 +1030,117 @@ class _DashboardContentState extends State<DashboardContent>
                         },
                       ),
                     ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButton<String>(
+                        value: _selectedCategory,
+                        underline: const SizedBox(),
+                        items: _categoryOptions
+                            .map(
+                              (e) => DropdownMenuItem(
+                                value: e,
+                                child: Text(
+                                  e,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (val) {
+                          if (val == null) return;
+                          setState(() => _selectedCategory = val);
+                        },
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButton<String>(
+                        value: _selectedPeriodType,
+                        underline: const SizedBox(),
+                        items: const ['All', 'Month', 'Date']
+                            .map(
+                              (e) => DropdownMenuItem(
+                                value: e,
+                                child: Text(e),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (val) {
+                          if (val == null) return;
+                          setState(() {
+                            _selectedPeriodType = val;
+                            if (val != 'Month') _selectedMonthKey = 'All';
+                            if (val != 'Date') _selectedDateKey = 'All';
+                          });
+                        },
+                      ),
+                    ),
+                    if (_selectedPeriodType == 'Month')
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: DropdownButton<String>(
+                          value: _monthOptions.contains(_selectedMonthKey)
+                              ? _selectedMonthKey
+                              : 'All',
+                          underline: const SizedBox(),
+                          items: _monthOptions
+                              .map(
+                                (e) => DropdownMenuItem(
+                                  value: e,
+                                  child: Text(
+                                    _monthLabelFromKey(e),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (val) {
+                            if (val == null) return;
+                            setState(() => _selectedMonthKey = val);
+                          },
+                        ),
+                      ),
+                    if (_selectedPeriodType == 'Date')
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: DropdownButton<String>(
+                          value: _dateOptions.contains(_selectedDateKey)
+                              ? _selectedDateKey
+                              : 'All',
+                          underline: const SizedBox(),
+                          items: _dateOptions
+                              .map(
+                                (e) => DropdownMenuItem(
+                                  value: e,
+                                  child: Text(
+                                    e == 'All' ? 'All Dates' : e,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (val) {
+                            if (val == null) return;
+                            setState(() => _selectedDateKey = val);
+                          },
+                        ),
+                      ),
                   ],
                 );
 
@@ -844,6 +1188,8 @@ class _DashboardContentState extends State<DashboardContent>
                     Column(
                       children: [
                         if (isAllCategory) ...[
+                          _buildHighLowCategoryCards(categoryTotals),
+                          const SizedBox(height: 16),
                           _buildCategorySummaryCards(
                             categoryTotals,
                             overallTotal,
@@ -862,26 +1208,6 @@ class _DashboardContentState extends State<DashboardContent>
                                 "Top nature_of_collection amount per category",
                           ),
                           const SizedBox(height: 24),
-                          _buildGraphCard(
-                            "Income by Category",
-                            _barChart(
-                              categoryBars.groups,
-                              categoryBars.labels,
-                              categoryBars.interval,
-                            ),
-                            height: 300,
-                            totalLabel:
-                                "Overall Total: PHP ${overallTotal.toStringAsFixed(2)}",
-                          ),
-                          const SizedBox(height: 40),
-                          const Text(
-                            "Income Distribution",
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
                           Wrap(
                             spacing: 14,
                             runSpacing: 8,
@@ -894,12 +1220,13 @@ class _DashboardContentState extends State<DashboardContent>
                                 ),
                             ],
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 12),
                           _buildGraphCard(
-                            "Income Breakdown Overview",
+                            "All Category Income Pie",
                             _categoryPie3d(categoryTotals),
-                            height: 380,
-                            totalLabel: "Categories: ${categoryTotals.length}",
+                            height: 360,
+                            totalLabel:
+                                "Overall Total: PHP ${overallTotal.toStringAsFixed(2)}",
                           ),
                         ] else ...[
                           _buildGraphCard(
@@ -908,6 +1235,7 @@ class _DashboardContentState extends State<DashboardContent>
                               selectedLine.spots,
                               selectedLine.labels,
                               selectedLine.interval,
+                              primaryColor: _categoryColor(selectedCategory, 0),
                             ),
                             totalLabel:
                                 "Total: PHP ${selectedTotal.toStringAsFixed(2)}",
@@ -1099,6 +1427,97 @@ class _DashboardContentState extends State<DashboardContent>
     );
   }
 
+  Widget _buildHighLowCategoryCards(Map<String, double> totals) {
+    if (totals.isEmpty) return const SizedBox.shrink();
+    final sorted = totals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final highest = sorted.first;
+    final lowest = sorted.last;
+    final showLowest = sorted.length > 1;
+
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: [
+        _buildHighLowCard(
+          title: 'Highest Income Category',
+          category: highest.key,
+          amount: highest.value,
+          color: const Color(0xFF1E7A3E),
+        ),
+        if (showLowest)
+          _buildHighLowCard(
+            title: 'Lowest Income Category',
+            category: lowest.key,
+            amount: lowest.value,
+            color: const Color(0xFFB3261E),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildHighLowCard({
+    required String title,
+    required String category,
+    required double amount,
+    required Color color,
+  }) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 250, maxWidth: 360),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          gradient: LinearGradient(
+            colors: [
+              color.withValues(alpha: 0.20),
+              color.withValues(alpha: 0.08),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(
+            color: color.withValues(alpha: 0.45),
+            width: 1.1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: color.withValues(alpha: 0.95),
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              category,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: _navy900,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'PHP ${amount.toStringAsFixed(2)}',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: _navy800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCategoryCard(
     String category,
     double amount,
@@ -1223,12 +1642,20 @@ class _DashboardContentState extends State<DashboardContent>
     );
   }
 
-  Widget _lineChart(List<FlSpot> spots, List<String> labels, int interval) {
+  Widget _lineChart(
+    List<FlSpot> spots,
+    List<String> labels,
+    int interval, {
+    Color? primaryColor,
+  }) {
     final displaySpots = spots.isEmpty ? [const FlSpot(0, 0)] : spots;
     final maxY =
         displaySpots.map((e) => e.y).fold<double>(0, (a, b) => a > b ? a : b);
-    final lineGradient = const LinearGradient(
-      colors: [_cyan500, _cyan400],
+    final base = primaryColor ?? _cyan500;
+    final hsl = HSLColor.fromColor(base);
+    final top = hsl.withLightness((hsl.lightness + 0.14).clamp(0.0, 1.0)).toColor();
+    final lineGradient = LinearGradient(
+      colors: [base, top],
       begin: Alignment.bottomCenter,
       end: Alignment.topCenter,
     );
@@ -1293,7 +1720,7 @@ class _DashboardContentState extends State<DashboardContent>
             spots: displaySpots,
             isCurved: true,
             barWidth: 8,
-            color: _cyan500.withValues(alpha: 0.18),
+            color: base.withValues(alpha: 0.18),
             dotData: const FlDotData(show: false),
             belowBarData: BarAreaData(show: false),
           ),
@@ -1306,8 +1733,8 @@ class _DashboardContentState extends State<DashboardContent>
               show: true,
               gradient: LinearGradient(
                 colors: [
-                  _cyan500.withValues(alpha: 0.28),
-                  _cyan500.withValues(alpha: 0.02),
+                  base.withValues(alpha: 0.28),
+                  base.withValues(alpha: 0.02),
                 ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
@@ -1321,7 +1748,7 @@ class _DashboardContentState extends State<DashboardContent>
                 radius: 5,
                 color: Colors.white,
                 strokeWidth: 3,
-                strokeColor: _cyan500,
+                strokeColor: base,
               ),
             ),
           ),

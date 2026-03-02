@@ -11,14 +11,26 @@ create table if not exists public.receipt_print_logs (
   payor text,
   officer text,
   total_amount numeric(12, 2) not null default 0,
-  collection_items jsonb not null default '[]'::jsonb
+  collection_items jsonb not null default '[]'::jsonb,
+  nature_code text,
+  payment_method text
 );
+
+alter table public.receipt_print_logs
+  add column if not exists nature_code text,
+  add column if not exists payment_method text;
 
 create index if not exists idx_receipt_print_logs_printed_at
   on public.receipt_print_logs (printed_at desc);
 
 create index if not exists idx_receipt_print_logs_category
   on public.receipt_print_logs (category);
+
+create index if not exists idx_receipt_print_logs_nature_code
+  on public.receipt_print_logs (nature_code);
+
+create index if not exists idx_receipt_print_logs_payment_method
+  on public.receipt_print_logs (payment_method);
 
 alter table public.receipt_print_logs enable row level security;
 

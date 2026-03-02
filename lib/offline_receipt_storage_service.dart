@@ -104,6 +104,8 @@ class OfflineReceiptStorageService {
       'officer': _asString(map['officer']),
       'total_amount': total,
       'collection_items': _asJsonList(map['collection_items']),
+      'nature_code': _asString(map['nature_code']),
+      'payment_method': _asString(map['payment_method']),
     };
   }
 

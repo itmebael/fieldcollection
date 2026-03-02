@@ -1069,9 +1069,28 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           (nature == null || nature.isEmpty)) {
         continue;
       }
+      String? resolvedNatureCode;
+      if (accountCode.isNotEmpty) {
+        resolvedNatureCode = accountCode;
+      } else {
+        final selectedNature = (nature ?? '').trim().toLowerCase();
+        if (selectedNature.isNotEmpty) {
+          for (final row in availableNatures) {
+            final label =
+                (row['nature_of_collection'] ?? '').toString().trim().toLowerCase();
+            if (label != selectedNature) continue;
+            final code = (row['nature_code'] ?? '').toString().trim();
+            if (code.isNotEmpty) {
+              resolvedNatureCode = code;
+              break;
+            }
+          }
+        }
+      }
       items.add({
         'nature': nature,
         'account_code': accountCode,
+        'nature_code': resolvedNatureCode,
         'price': amount,
       });
     }
@@ -1521,6 +1540,16 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
         }
       }
 
+      final natureCodes = <String>{};
+      for (final item in items) {
+        final code = (item['nature_code'] ?? '').toString().trim();
+        if (code.isNotEmpty) {
+          natureCodes.add(code);
+        }
+      }
+      final combinedNatureCodes =
+          natureCodes.isEmpty ? null : natureCodes.join(',');
+
       final printLogPayload = <String, dynamic>{
         'printed_at': now.toIso8601String(),
         'category': selectedCategory,
@@ -1532,6 +1561,8 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             officerCtrl.text.trim().isEmpty ? null : officerCtrl.text.trim(),
         'total_amount': total,
         'collection_items': items,
+        'nature_code': combinedNatureCodes,
+        'payment_method': paymentMethod,
       };
 
       try {
