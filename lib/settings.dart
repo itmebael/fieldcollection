@@ -700,9 +700,10 @@ class _SettingsPageState extends State<SettingsPage> {
                                           )
                                         : const Text('No signature uploaded')),
                               ),
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 14),
                               Wrap(
                                 spacing: 10,
+                                runSpacing: 12,
                                 children: [
                                   OutlinedButton.icon(
                                     onPressed: _pickSignatureImage,

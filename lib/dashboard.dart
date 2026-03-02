@@ -982,13 +982,14 @@ class _DashboardContentState extends State<DashboardContent>
           // HEADER
           // ===============================
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             decoration: const BoxDecoration(
               color: _navy700,
             ),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final compact = constraints.maxWidth < 620;
+                final controlHeight = compact ? 48.0 : 44.0;
                 final title = const Text(
                   "Municipal Financial Dashboard",
                   maxLines: 1,
@@ -1000,16 +1001,23 @@ class _DashboardContentState extends State<DashboardContent>
                   ),
                 );
                 final actions = Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: 10,
+                  runSpacing: 12,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    IconButton(
-                      onPressed: _isLoading ? null : _loadDashboardEntries,
-                      tooltip: "Refresh",
-                      icon: const Icon(Icons.refresh, color: Colors.white),
+                    SizedBox(
+                      width: 44,
+                      height: controlHeight,
+                      child: IconButton(
+                        onPressed: _isLoading ? null : _loadDashboardEntries,
+                        tooltip: "Refresh",
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.refresh, color: Colors.white),
+                      ),
                     ),
                     Container(
+                      height: controlHeight,
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -1031,6 +1039,10 @@ class _DashboardContentState extends State<DashboardContent>
                       ),
                     ),
                     Container(
+                      constraints: BoxConstraints(
+                        minWidth: compact ? 320 : 220,
+                      ),
+                      height: controlHeight,
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -1057,6 +1069,10 @@ class _DashboardContentState extends State<DashboardContent>
                       ),
                     ),
                     Container(
+                      constraints: BoxConstraints(
+                        minWidth: compact ? 160 : 120,
+                      ),
+                      height: controlHeight,
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -1085,6 +1101,10 @@ class _DashboardContentState extends State<DashboardContent>
                     ),
                     if (_selectedPeriodType == 'Month')
                       Container(
+                        constraints: BoxConstraints(
+                          minWidth: compact ? 220 : 180,
+                        ),
+                        height: controlHeight,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
                           color: Colors.white,
@@ -1114,6 +1134,10 @@ class _DashboardContentState extends State<DashboardContent>
                       ),
                     if (_selectedPeriodType == 'Date')
                       Container(
+                        constraints: BoxConstraints(
+                          minWidth: compact ? 220 : 180,
+                        ),
+                        height: controlHeight,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
                           color: Colors.white,
@@ -1149,7 +1173,7 @@ class _DashboardContentState extends State<DashboardContent>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       title,
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       actions,
                     ],
                   );

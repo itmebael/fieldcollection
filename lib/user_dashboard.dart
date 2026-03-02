@@ -132,11 +132,19 @@ class _UserDashboardNavigationState extends State<UserDashboardNavigation> {
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final screenWidth = media.size.width;
-    final textScale = screenWidth < 380
+    final responsiveBoost = screenWidth < 380
+        ? 0.32
+        : screenWidth < 480
+            ? 0.40
+            : screenWidth < 900
+                ? 0.48
+                : 0.52;
+    final textScale = (screenWidth < 380
         ? 1.0
         : screenWidth < 480
             ? 1.06
-            : 1.12;
+            : 1.12) +
+        responsiveBoost;
     final bottomBarPadding = BottomBarView.baseHeight + media.padding.bottom;
     return ValueListenableBuilder<String>(
       valueListenable: LanguageService.currentLanguage,

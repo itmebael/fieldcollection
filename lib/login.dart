@@ -16,6 +16,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _isHoveringUsername = false;
   bool _isHoveringPassword = false;
   bool _isHoveringButton = false;
+  bool _obscurePassword = true;
 
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
@@ -192,7 +193,8 @@ class _LoginPageState extends State<LoginPage> {
                                       child: _buildTextField(
                                         label: "Password",
                                         icon: Icons.lock_rounded,
-                                        obscure: true,
+                                        obscure: _obscurePassword,
+                                        showVisibilityToggle: true,
                                         isHovering: _isHoveringPassword,
                                         controller: _passwordController,
                                       ),
@@ -285,6 +287,7 @@ class _LoginPageState extends State<LoginPage> {
     required String label,
     required IconData icon,
     bool obscure = false,
+    bool showVisibilityToggle = false,
     required bool isHovering,
     required TextEditingController controller,
   }) {
@@ -315,6 +318,20 @@ class _LoginPageState extends State<LoginPage> {
               fontWeight: FontWeight.w600,
             ),
             icon: Icon(icon, color: const Color(0xFF1F5DA8)),
+            suffixIcon: showVisibilityToggle
+                ? IconButton(
+                    tooltip: obscure ? 'Show password' : 'Hide password',
+                    icon: Icon(
+                      obscure ? Icons.visibility_off : Icons.visibility,
+                      color: const Color(0xFF1F5DA8),
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _obscurePassword = !_obscurePassword;
+                      });
+                    },
+                  )
+                : null,
           ),
           style: const TextStyle(
             color: Color(0xFF0E2F58),

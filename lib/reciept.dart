@@ -80,6 +80,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   static const String _penaltyNatureLabel = 'Penalty';
   static const String _amusementTaxNatureLabel = 'amusement tax/';
   static const String _fixedAgencyName = 'CTO CATBALOGAN';
+  static const double _popupTextScaleBoost = 0.5;
   int _natureLoadVersion = 0;
   bool _isApplyingAutoAmounts = false;
   final ScrollController _verticalScrollController = ScrollController();
@@ -591,7 +592,9 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     await showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
+        return _wrapPopupTextScale(
+          context,
+          AlertDialog(
           title: const Text('Enter Quantity'),
           content: TextField(
             controller: quantityController,
@@ -618,8 +621,19 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
               child: const Text('OK'),
             ),
           ],
+          ),
         );
       },
+    );
+  }
+
+  Widget _wrapPopupTextScale(BuildContext context, Widget child) {
+    final media = MediaQuery.of(context);
+    final baseScale = media.textScaler.scale(1.0);
+    final boostedScale = (baseScale + _popupTextScaleBoost).clamp(1.0, 3.0);
+    return MediaQuery(
+      data: media.copyWith(textScaler: TextScaler.linear(boostedScale)),
+      child: child,
     );
   }
 
@@ -974,6 +988,12 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       lastDate: lastDate,
       helpText: 'Select Start Date',
       fieldLabelText: 'Start Date',
+      builder: (context, child) {
+        return _wrapPopupTextScale(
+          context,
+          child ?? const SizedBox.shrink(),
+        );
+      },
     );
   }
 
@@ -989,7 +1009,9 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final selected = await showDialog<String>(
       context: context,
       builder: (BuildContext context) {
-        return SimpleDialog(
+        return _wrapPopupTextScale(
+          context,
+          SimpleDialog(
           title: const Text('Select Period'),
           children: [
             SimpleDialogOption(
@@ -1009,6 +1031,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
               child: const Text('Whole month'),
             ),
           ],
+          ),
         );
       },
     );
@@ -1059,7 +1082,9 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final selected = await showDialog<Map<String, dynamic>?>(
       context: context,
       builder: (context) {
-        return StatefulBuilder(
+        return _wrapPopupTextScale(
+          context,
+          StatefulBuilder(
           builder: (context, setDialogState) {
             final filtered = dialogNatures.where((nature) {
               final label = (nature['nature_of_collection'] ?? '')
@@ -1142,6 +1167,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
               ],
             );
           },
+          ),
         );
       },
     );
@@ -1296,7 +1322,9 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final shouldPrint = await showDialog<bool>(
       context: context,
       builder: (context) {
-        return Dialog(
+        return _wrapPopupTextScale(
+          context,
+          Dialog(
           insetPadding: const EdgeInsets.all(18),
           child: SizedBox(
             width: 420,
@@ -1354,6 +1382,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                 ),
               ],
             ),
+          ),
           ),
         );
       },
@@ -1983,7 +2012,9 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     return showDialog<double>(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
+        return _wrapPopupTextScale(
+          context,
+          AlertDialog(
           title: const Text('Enter Amount'),
           content: TextField(
             controller: amountController,
@@ -2014,6 +2045,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
               child: const Text('OK'),
             ),
           ],
+          ),
         );
       },
     );

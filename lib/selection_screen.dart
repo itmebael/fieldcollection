@@ -143,8 +143,46 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen>
     return background.computeLuminance() > 0.62 ? Colors.black87 : Colors.white;
   }
 
+  String _normalizedCategoryText(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
   String _iconForCategory(String category) {
-    final v = category.toLowerCase().trim();
+    final v = _normalizedCategoryText(category);
+    if (v == 'other service income' || v.contains('other service')) {
+      return 'assets/landing.png';
+    }
+    if (v == 'inspection fees' ||
+        v == 'inspection fee' ||
+        v.contains('inspection') ||
+        v.contains('infection')) {
+      return 'assets/inspection.png';
+    }
+    if (v == 'business permit fees' ||
+        v == 'business permit fee' ||
+        v.contains('business permit') ||
+        v == 'amusement tax' ||
+        v == 'amusement tax' ||
+        v.contains('amusement tax')) {
+      return 'assets/manok.png';
+    }
+    if (v == 'parking and terminal fees' ||
+        v == 'parking and terminal fee' ||
+        (v.contains('parking') && v.contains('terminal'))) {
+      return 'assets/car.png';
+    }
+    if (v.contains('market') && v.contains('operation')) {
+      return 'assets/rent.png';
+    }
+    if (v == 'other economic enterprises' ||
+        v.contains('other economic') ||
+        v.contains('economic entrer')) {
+      return 'assets/car.png';
+    }
     if (v.contains('slaughter') || v.contains('katayan')) {
       return 'assets/dinner.png';
     }
@@ -386,6 +424,8 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen>
     final Color bgColor = categoryData['color'];
     final Color accent = (categoryData['accentColor'] as Color?) ??
         primary.withValues(alpha: 0.8);
+    final iconPath = (categoryData['icon'] ?? '').toString();
+    final iconScale = iconPath.toLowerCase().endsWith('manok.png') ? 1.0 : 1.5;
     final double circleSize = 84;
 
     return Container(
@@ -542,9 +582,9 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen>
                   ],
                 ),
                 child: Image.asset(
-                  categoryData['icon'],
-                  width: 40,
-                  height: 40,
+                  iconPath,
+                  width: 40 * iconScale,
+                  height: 40 * iconScale,
                   fit: BoxFit.contain,
                 ),
               ),
