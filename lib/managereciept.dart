@@ -4,17 +4,20 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'reciept.dart';
 import 'bottom_bar_view.dart';
 import 'models/tabIcon_data.dart';
+import 'category_theme_color.dart';
 
 class ManageReceiptOverviewPage extends StatefulWidget {
   final bool isUserMode;
   final String initialCategory;
   final String initialMarineFlow;
+  final bool openManagePayorOnStart;
 
   const ManageReceiptOverviewPage({
     super.key,
     this.isUserMode = false,
     this.initialCategory = 'Marine',
     this.initialMarineFlow = 'Incoming',
+    this.openManagePayorOnStart = false,
   });
 
   @override
@@ -23,42 +26,20 @@ class ManageReceiptOverviewPage extends StatefulWidget {
 }
 
 class _ManageReceiptOverviewPageState extends State<ManageReceiptOverviewPage> {
-  String _selectedCategory = 'All';
+  final String _selectedCategory = 'All';
   Timer? _receiptLoadTimer;
   int _userNavIndex = -1;
+  bool _receiptsTableMissing = false;
+
+  bool _isReceiptsTableMissingError(Object error) {
+    final msg = error.toString().toLowerCase();
+    return msg.contains('pgrst205') &&
+        msg.contains("public.receipts") &&
+        msg.contains('schema cache');
+  }
 
   Color _themeColorForCategory(String category) {
-    final v = category.toLowerCase().trim();
-    if (v == 'business permit fees' || v.contains('business permit')) {
-      return const Color(0xFFFF9800);
-    }
-    if (v == 'inspection fees' || v.contains('inspection')) {
-      return const Color(0xFF8E24AA);
-    }
-    if (v == 'other economic enterprises' || v.contains('other economic')) {
-      return const Color(0xFFFFEB3B);
-    }
-    if (v == 'other service income' || v.contains('other service')) {
-      return const Color(0xFF9E9E9E);
-    }
-    if (v == 'parking and terminal fees' || v.contains('parking and terminal')) {
-      return const Color(0xFFEC407A);
-    }
-    if (v == 'amusement tax/' ||
-        v == 'amusement tax' ||
-        v.contains('amusement tax')) {
-      return const Color(0xFF9ACD32);
-    }
-    if (v == 'slaughter' || v == 'slaugther' || v.contains('slaugh')) {
-      return const Color(0xFFD32F2F);
-    }
-    if (v == 'rent' || v == 'renta' || v.contains('rent')) {
-      return const Color(0xFF2E7D32);
-    }
-    if (v == 'marine' || v.contains('marine') || v.contains('fish')) {
-      return const Color(0xFF2E7D32);
-    }
-    return const Color(0xFF1E3A5F);
+    return categoryThemeColor(category);
   }
 
   Color _onColorFor(Color background) {
@@ -79,20 +60,42 @@ class _ManageReceiptOverviewPageState extends State<ManageReceiptOverviewPage> {
     _receiptLoadTimer = Timer(const Duration(milliseconds: 100), () async {
       try {
         final client = Supabase.instance.client;
+        if (!_receiptsTableMissing) {
+          if (_selectedCategory != 'All') {
+            await client
+                .from('receipts')
+                .select('*')
+                .eq('category', _selectedCategory)
+                .order('saved_at', ascending: false);
+          } else {
+            await client
+                .from('receipts')
+                .select('*')
+                .order('saved_at', ascending: false);
+          }
+          return;
+        }
+
+        // Fallback path when public.receipts is not available.
         if (_selectedCategory != 'All') {
           await client
-              .from('receipts')
+              .from('receipt_print_logs')
               .select('*')
               .eq('category', _selectedCategory)
-              .order('saved_at', ascending: false);
+              .order('printed_at', ascending: false);
         } else {
           await client
-              .from('receipts')
+              .from('receipt_print_logs')
               .select('*')
-              .order('saved_at', ascending: false);
+              .order('printed_at', ascending: false);
         }
       } catch (e) {
-        print('Error loading receipts: $e');
+        if (_isReceiptsTableMissingError(e)) {
+          _receiptsTableMissing = true;
+          // Retry once using fallback table.
+          _loadReceipts();
+          return;
+        }
       }
     });
   }
@@ -139,6 +142,7 @@ class _ManageReceiptOverviewPageState extends State<ManageReceiptOverviewPage> {
             showViewReceiptsButton:
                 false, // Hide view receipts button in form container
             showPrintButton: widget.isUserMode,
+            openManagePayorOnStart: widget.openManagePayorOnStart,
           ),
         ),
       ],

@@ -9,7 +9,6 @@ import 'reports.dart';
 import 'settings.dart';
 import 'login.dart';
 import 'session_service.dart';
-import 'nature_management.dart';
 import 'admin_user_management.dart';
 
 const Color _navy900 = Color(0xFF0A1F33);
@@ -19,12 +18,19 @@ const Color _cyan500 = Color(0xFF3BB3FD);
 const Color _cyan400 = Color(0xFF5CC7FF);
 const Color _cyan300 = Color(0xFF8AD9FF);
 const Color _glassWhite = Color(0xFFFFFFFF);
-const Color _sidebarBorder = Color(0xFF1C3D5E);
-const Color _sidebarItemIdle = Color(0x0014345C);
-const Color _sidebarItemActive = Color(0xFF1A426F);
+const Color _sidebarBorder = Color(0xFF14345C);
+const Color _sidebarItemIdle = Color(0x00000000);
+const Color _sidebarItemActive = Color(0xFF2A66A8);
+const Color _sidebarSurface = Color(0xFF2A5B94);
+const Color _sidebarText = Color(0xFFFFFFFF);
 
 class MainNavigation extends StatefulWidget {
-  const MainNavigation({super.key});
+  final String selectedCategory;
+
+  const MainNavigation({
+    super.key,
+    this.selectedCategory = 'All',
+  });
 
   @override
   State<MainNavigation> createState() => _MainNavigationState();
@@ -33,13 +39,12 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = [
-    const DashboardContent(),
-    const ReportsPage(),
-    const NatureManagementScreen(),
-    const AdminUserManagementScreen(),
-    const SettingsPage(),
-  ];
+  List<Widget> get _screens => [
+        DashboardContent(selectedCategory: widget.selectedCategory),
+        const ReportsPage(),
+        const AdminUserManagementScreen(),
+        const SettingsPage(),
+      ];
 
   @override
   Widget build(BuildContext context) {
@@ -54,124 +59,142 @@ class _MainNavigationState extends State<MainNavigation> {
           SizedBox(
             width: isExtended ? 250 : 92,
             child: Container(
-              decoration: const BoxDecoration(
-                color: _navy900,
-                border: Border(
-                  right: BorderSide(color: _sidebarBorder),
+              margin: EdgeInsets.zero,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xFF0E2D52),
+                    Color(0xFF143E73),
+                    Color(0xFF1E3A5F),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                 ),
-              ),
-              child: Column(
-                children: [
-                  const SizedBox(height: 22),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    child: isExtended
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: _navy800,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.14),
-                              ),
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(Icons.shield,
-                                    color: Colors.white, size: 22),
-                                SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        "Admin Console",
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      SizedBox(height: 2),
-                                      Text(
-                                        "System Management",
-                                        style: TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : const Icon(
-                            Icons.shield,
-                            size: 28,
-                            color: Colors.white,
-                          ),
-                  ),
-                  const SizedBox(height: 16),
-                  Divider(
-                    color: Colors.white.withValues(alpha: 0.18),
-                    indent: 14,
-                    endIndent: 14,
-                    height: 1,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildNavItem(Icons.dashboard, "Dashboard", 0, isExtended),
-                  _buildNavItem(Icons.assessment, "Reports", 1, isExtended),
-                  _buildNavItem(Icons.playlist_add, "Add Entry", 2, isExtended),
-                  _buildNavItem(
-                      Icons.manage_accounts, "User Accounts", 3, isExtended),
-                  _buildNavItem(Icons.settings, "Settings", 4, isExtended),
-                  const Spacer(),
-                  Divider(
-                    color: Colors.white.withValues(alpha: 0.18),
-                    indent: 14,
-                    endIndent: 14,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 18),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 44,
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.logout, size: 18),
-                        label: isExtended
-                            ? const Text("Sign Out")
-                            : const SizedBox.shrink(),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.30),
-                          ),
-                          backgroundColor: _navy800,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isExtended ? 12 : 0,
-                          ),
-                        ),
-                        onPressed: () {
-                          SessionService.clearSession().then((_) {
-                            if (!context.mounted) return;
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const LoginPage(),
-                              ),
-                            );
-                          });
-                        },
-                      ),
-                    ),
+                borderRadius: BorderRadius.zero,
+                border: const Border(right: BorderSide(color: _sidebarBorder)),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF0A1F33).withValues(alpha: 0.18),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
                   ),
                 ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 22),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: isExtended
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: _sidebarSurface,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: const Color(0xFF14345C),
+                                ),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.shield,
+                                      color: _sidebarText, size: 22),
+                                  SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          "Admin Console",
+                                          style: TextStyle(
+                                            color: _sidebarText,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        SizedBox(height: 2),
+                                        Text(
+                                          "System Management",
+                                          style: TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : const Icon(
+                              Icons.shield,
+                              size: 28,
+                              color: _sidebarText,
+                            ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(
+                      color: Color(0xFF14345C),
+                      indent: 14,
+                      endIndent: 14,
+                      height: 1,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildNavItem(Icons.dashboard, "Dashboard", 0, isExtended),
+                    _buildNavItem(Icons.assessment, "Reports", 1, isExtended),
+                    _buildNavItem(
+                        Icons.manage_accounts, "User Accounts", 2, isExtended),
+                    _buildNavItem(Icons.settings, "Settings", 3, isExtended),
+                    const Spacer(),
+                    const Divider(
+                      color: Color(0xFF14345C),
+                      indent: 14,
+                      endIndent: 14,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 18),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.logout, size: 18),
+                          label: isExtended
+                              ? const Text("Sign Out")
+                              : const SizedBox.shrink(),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _sidebarText,
+                            side: const BorderSide(
+                              color: Color(0xFF14345C),
+                            ),
+                            backgroundColor: _sidebarSurface,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isExtended ? 12 : 0,
+                            ),
+                          ),
+                          onPressed: () {
+                            SessionService.clearSession().then((_) {
+                              if (!context.mounted) return;
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const LoginPage(),
+                                ),
+                              );
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -203,12 +226,21 @@ class _MainNavigationState extends State<MainNavigation> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           decoration: BoxDecoration(
             color: isSelected ? _sidebarItemActive : _sidebarItemIdle,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: isSelected
-                  ? Colors.white.withValues(alpha: 0.34)
-                  : Colors.white.withValues(alpha: 0.12),
+                  ? const Color(0xFF14345C)
+                  : const Color(0xFF1F4F83),
             ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF7EA8E2).withValues(alpha: 0.32),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : null,
           ),
           child: Row(
             mainAxisAlignment:
@@ -216,7 +248,7 @@ class _MainNavigationState extends State<MainNavigation> {
             children: [
               Icon(
                 icon,
-                color: Colors.white.withValues(alpha: isSelected ? 1.0 : 0.84),
+                color: _sidebarText.withValues(alpha: isSelected ? 1.0 : 0.84),
                 size: 21,
               ),
               if (isExtended) const SizedBox(width: 12),
@@ -226,7 +258,7 @@ class _MainNavigationState extends State<MainNavigation> {
                     label,
                     style: TextStyle(
                       color:
-                          Colors.white.withValues(alpha: isSelected ? 1 : 0.9),
+                          _sidebarText.withValues(alpha: isSelected ? 1 : 0.9),
                       fontWeight:
                           isSelected ? FontWeight.w700 : FontWeight.w500,
                       fontSize: 14,
@@ -247,10 +279,12 @@ class _MainNavigationState extends State<MainNavigation> {
 // ===============================
 class DashboardContent extends StatefulWidget {
   final String selectedCategory;
+  final bool userScoped;
 
   const DashboardContent({
     super.key,
-    this.selectedCategory = 'All',
+    this.selectedCategory = '',
+    this.userScoped = false,
   });
 
   @override
@@ -262,7 +296,7 @@ class _DashboardContentState extends State<DashboardContent>
   bool _isLoading = false;
   List<Map<String, dynamic>> _entries = [];
   String _selectedRange = 'Daily';
-  String _selectedCategory = 'All';
+  String _selectedCategory = '';
   String _selectedPeriodType = 'All';
   String _selectedMonthKey = 'All';
   String _selectedDateKey = 'All';
@@ -307,8 +341,16 @@ class _DashboardContentState extends State<DashboardContent>
 
   String _normalizeCategory(String value) {
     final normalized = value.trim();
-    if (normalized.isEmpty) return 'All';
+    if (normalized.isEmpty || normalized.toLowerCase() == 'all') return '';
     return normalized;
+  }
+
+  String _normalizedCategoryText(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 
   String _monthKey(DateTime dt) =>
@@ -425,7 +467,7 @@ class _DashboardContentState extends State<DashboardContent>
   }
 
   List<String> get _categoryOptions {
-    final set = <String>{'All'};
+    final set = <String>{};
     for (final row in _entries) {
       final category = (row['category'] ?? '').toString().trim();
       if (category.isNotEmpty) {
@@ -435,10 +477,8 @@ class _DashboardContentState extends State<DashboardContent>
     if (_selectedCategory.trim().isNotEmpty) {
       set.add(_selectedCategory.trim());
     }
-    final list = set.toList();
-    if (list.length <= 1) return list;
-    final body = list.where((e) => e != 'All').toList()..sort();
-    return ['All', ...body];
+    final list = set.toList()..sort();
+    return list;
   }
 
   Future<void> _loadDashboardEntries() async {
@@ -447,57 +487,92 @@ class _DashboardContentState extends State<DashboardContent>
     try {
       final rows = <Map<String, dynamic>>[];
       final client = Supabase.instance.client;
-
-      try {
-        final printLogs = await client
-            .from('receipt_print_logs')
-            .select(
-              'category, total_amount, printed_at, collection_items, nature_code, payment_method',
-            )
-            .order('printed_at', ascending: false);
-        for (final item in List<Map<String, dynamic>>.from(printLogs)) {
-          final printedAt = _extractDate(item);
-          if (DateTime.tryParse(printedAt) == null) continue;
-          rows.add({
-            'category': (item['category'] ?? '').toString().trim(),
-            'total_amount': _extractAmount(item),
-            'printed_at': printedAt,
-            'collection_items': item['collection_items'],
-            'nature_of_collection': item['nature_of_collection'],
-            'nature_code': item['nature_code'],
-            'payment_method': item['payment_method'],
-          });
-        }
-      } catch (_) {
-        // Fall back to receipts when print-log table is unavailable or blocked.
+      final userId = client.auth.currentUser?.id;
+      if (widget.userScoped && (userId == null || userId.isEmpty)) {
+        throw Exception('No authenticated user.');
       }
-
-      if (rows.isEmpty) {
+      var query = client.from('print_receipts').select(
+            'id, receipt_no, payor, payment_method, receipt_date, printed_at, total_amount',
+          );
+      if (widget.userScoped) {
+        query = query.eq('owner_id', userId!);
+      }
+      final result = await query.order('printed_at', ascending: false);
+      final headerRows = List<Map<String, dynamic>>.from(result);
+      final receiptIds = headerRows
+          .map((e) => (e['id'] ?? '').toString())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      final itemsByReceipt = <String, List<Map<String, dynamic>>>{};
+      if (receiptIds.isNotEmpty) {
         try {
-          final receipts = await client
-              .from('receipts')
-              .select('*')
-              .order('saved_at', ascending: false);
-          for (final item in List<Map<String, dynamic>>.from(receipts)) {
-            final printedAt = _extractDate(item);
-            if (DateTime.tryParse(printedAt) == null) continue;
-            rows.add({
-              'category': (item['category'] ?? '').toString().trim(),
-              'total_amount': _extractAmount(item),
-              'printed_at': printedAt,
-              'collection_items': item['collection_items'],
-              'nature_of_collection': item['nature_of_collection'],
-              'nature_code': item['nature_code'],
-              'payment_method': item['payment_method'],
-            });
+          final itemRows = await client
+              .from('print_receipt_items')
+              .select(
+                  'receipt_id, line_no, "Category", nature, "SubNature", "AcctNo", amount')
+              .inFilter('receipt_id', receiptIds)
+              .order('line_no');
+          for (final raw in List<Map<String, dynamic>>.from(itemRows)) {
+            final receiptId = (raw['receipt_id'] ?? '').toString();
+            if (receiptId.isEmpty) continue;
+            final nature = (raw['nature'] ?? '').toString().trim();
+            final subNature = (raw['SubNature'] ?? '').toString().trim();
+            final label = subNature.isEmpty ? nature : '$nature - $subNature';
+            final amount = (raw['amount'] as num?)?.toDouble() ?? 0.0;
+            final item = <String, dynamic>{
+              'category': (raw['Category'] ?? '').toString().trim(),
+              'nature': label,
+              'nature_of_collection': label,
+              'nature_code': (raw['AcctNo'] ?? '').toString().trim(),
+              'amount': amount,
+              'price': amount,
+            };
+            itemsByReceipt.putIfAbsent(receiptId, () => []).add(item);
           }
-        } catch (_) {
-          // Keep rows empty if fallback source also fails.
+        } catch (e) {
+          debugPrint('Dashboard item load failed: $e');
         }
+      }
+      for (final header in headerRows) {
+        final printedAt = _extractDate(header);
+        if (DateTime.tryParse(printedAt) == null) continue;
+        final receiptId = (header['id'] ?? '').toString();
+        final items = itemsByReceipt[receiptId] ?? <Map<String, dynamic>>[];
+        String category = '';
+        for (final item in items) {
+          final c = (item['category'] ?? '').toString().trim();
+          if (c.isNotEmpty) {
+            category = c;
+            break;
+          }
+        }
+        rows.add({
+          'category': category,
+          'total_amount': _extractAmount(header),
+          'printed_at': printedAt,
+          'collection_items': items,
+          'nature_of_collection': items.isNotEmpty
+              ? (items.first['nature_of_collection'] ?? '')
+              : '',
+          'nature_code':
+              items.isNotEmpty ? (items.first['nature_code'] ?? '') : '',
+          'payment_method': header['payment_method'],
+          'payor': header['payor'],
+          'serial_no': header['receipt_no'],
+        });
       }
 
       if (!mounted) return;
-      setState(() => _entries = rows);
+      setState(() {
+        _entries = rows;
+        final options = _categoryOptions;
+        if (options.isEmpty) {
+          _selectedCategory = '';
+        } else if (!_selectedCategory.trim().isNotEmpty ||
+            !options.contains(_selectedCategory)) {
+          _selectedCategory = options.first;
+        }
+      });
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -647,7 +722,8 @@ class _DashboardContentState extends State<DashboardContent>
   BarChartGroupData _barGroup(int x, double sum, {Color? primary}) {
     final base = primary ?? _cyan500;
     final hsl = HSLColor.fromColor(base);
-    final top = hsl.withLightness((hsl.lightness + 0.14).clamp(0.0, 1.0)).toColor();
+    final top =
+        hsl.withLightness((hsl.lightness + 0.14).clamp(0.0, 1.0)).toColor();
     return BarChartGroupData(
       x: x,
       barsSpace: -8,
@@ -687,36 +763,56 @@ class _DashboardContentState extends State<DashboardContent>
   }
 
   Color _categoryColor(String category, int i) {
-    final v = category.toLowerCase().trim();
-    if (v == 'business permit fees' || v.contains('business permit')) {
-      return const Color(0xFFFF9800);
-    }
-    if (v == 'inspection fees' || v.contains('inspection')) {
-      return const Color(0xFF8E24AA);
-    }
-    if (v == 'other economic enterprises' || v.contains('other economic')) {
-      return const Color(0xFFFFEB3B);
-    }
-    if (v == 'other service income' || v.contains('other service')) {
-      return const Color(0xFF9E9E9E);
-    }
-    if (v == 'parking and terminal fees' || v.contains('parking and terminal')) {
-      return const Color(0xFFEC407A);
-    }
-    if (v == 'amusement tax/' ||
-        v == 'amusement tax' ||
-        v.contains('amusement tax')) {
-      return const Color(0xFF9ACD32);
-    }
+    final v = _normalizedCategoryText(category);
+    final colorMap = <String, Color>{
+      _normalizedCategoryText('A. INTERNAL REVENUE ALLOTMENT'):
+          const Color(0xFF1E3A8A),
+      _normalizedCategoryText('A. REGULATORY FEES (Permits and Licenses)'):
+          const Color(0xFF059669),
+      _normalizedCategoryText('A. SPECIAL EDUCATION TAX'):
+          const Color(0xFF7C3AED),
+      _normalizedCategoryText('B. OTHER SHARES FROM NATIONAL TAX COLLECTIONS'):
+          const Color(0xFFEA580C),
+      _normalizedCategoryText('B. SERVICE/USER CHARGES (Service Income)'):
+          const Color(0xFFD97706),
+      _normalizedCategoryText('B. TAX ON BUSINESS'): const Color(0xFFDC2626),
+      _normalizedCategoryText('C. EXTRAORDINARY RECEIPTS/DONATIONS/AIDS'):
+          const Color(0xFF0EA5E9),
+      _normalizedCategoryText('C. OTHER TAXES'): const Color(0xFF92400E),
+      _normalizedCategoryText(
+              'C. RECEIPTS FROM ECONOMIC ENTERPRISES (Business Income)'):
+          const Color(0xFFDB2777),
+      _normalizedCategoryText('D. INTER-LOCAL TRANSFER'):
+          const Color(0xFF374151),
+      _normalizedCategoryText(
+              'D. OTHER INCOME/ RECEIPTS (Other General Income)'):
+          const Color(0xFF65A30D),
+      _normalizedCategoryText('E. CAPITAL/INVESTMENT RECEIPTS'):
+          const Color(0xFF0F766E),
+      _normalizedCategoryText('F. RECEIPTS FROM LOAN AND BORROWINGS (PAYABLE)'):
+          const Color(0xFF4F46E5),
+      _normalizedCategoryText('G. OTHER NON-INCOME RECEIPTS'):
+          const Color(0xFF525252),
+    };
+
+    final mapped = colorMap[v];
+    if (mapped != null) return mapped;
+
     const palette = <Color>[
-      Color(0xFFFF6B6B),
-      Color(0xFFFFA94D),
-      Color(0xFFFFD43B),
-      Color(0xFF69DB7C),
-      Color(0xFF4DABF7),
-      Color(0xFF9775FA),
-      Color(0xFFF06595),
-      Color(0xFF20C997),
+      Color(0xFF1E3A8A),
+      Color(0xFF059669),
+      Color(0xFF7C3AED),
+      Color(0xFFEA580C),
+      Color(0xFFD97706),
+      Color(0xFFDC2626),
+      Color(0xFF0EA5E9),
+      Color(0xFF92400E),
+      Color(0xFFDB2777),
+      Color(0xFF374151),
+      Color(0xFF65A30D),
+      Color(0xFF0F766E),
+      Color(0xFF4F46E5),
+      Color(0xFF525252),
     ];
     return palette[i % palette.length];
   }
@@ -793,7 +889,8 @@ class _DashboardContentState extends State<DashboardContent>
     final labels = <String>[];
     for (var i = 0; i < rows.length; i++) {
       groups.add(
-        _barGroup(i, rows[i].amount, primary: _categoryColor(rows[i].category, i)),
+        _barGroup(i, rows[i].amount,
+            primary: _categoryColor(rows[i].category, i)),
       );
       final c = rows[i].category;
       labels.add(c.length > 10 ? '${c.substring(0, 10)}...' : c);
@@ -925,8 +1022,7 @@ class _DashboardContentState extends State<DashboardContent>
     if (_entries.isEmpty) return const [];
     final now = _referenceDate();
     final selectedCategory = _selectedCategory.trim().toLowerCase();
-    final applyCategoryFilter =
-        selectedCategory.isNotEmpty && selectedCategory != 'all';
+    final applyCategoryFilter = selectedCategory.isNotEmpty;
     final applyMonthFilter =
         _selectedPeriodType == 'Month' && _selectedMonthKey != 'All';
     final applyDateFilter =
@@ -960,8 +1056,19 @@ class _DashboardContentState extends State<DashboardContent>
   @override
   Widget build(BuildContext context) {
     final selectedCategory = _selectedCategory.trim();
-    final isAllCategory =
-        selectedCategory.isEmpty || selectedCategory.toLowerCase() == 'all';
+    final isAllCategory = selectedCategory.isEmpty;
+    final filteredEntries = _filteredEntries();
+    final receiptCount = filteredEntries.length;
+    const dashboardBgColor = Color(0xFFF4F8FF);
+    final headerBaseColor = isAllCategory
+        ? const Color(0xFF1E3A5F)
+        : _categoryColor(selectedCategory, 0);
+    final headerHsl = HSLColor.fromColor(headerBaseColor);
+    final headerColor = headerHsl
+        .withSaturation((headerHsl.saturation * 0.85).clamp(0.35, 0.82))
+        .withLightness(0.26)
+        .toColor();
+    final headerBorderColor = headerHsl.withLightness(0.20).toColor();
 
     final selectedToken = selectedCategory.toLowerCase();
     final selectedTotal = _sumForCategory(selectedToken);
@@ -974,7 +1081,7 @@ class _DashboardContentState extends State<DashboardContent>
         categoryTotals.values.fold<double>(0.0, (sum, value) => sum + value);
 
     return Container(
-      color: const Color(0xFFF2F7FB),
+      color: dashboardBgColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -982,15 +1089,21 @@ class _DashboardContentState extends State<DashboardContent>
           // HEADER
           // ===============================
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            decoration: const BoxDecoration(
-              color: _navy700,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            decoration: BoxDecoration(
+              color: headerColor,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: headerBorderColor, width: 1.2),
             ),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final compact = constraints.maxWidth < 620;
                 final controlHeight = compact ? 48.0 : 44.0;
-                final title = const Text(
+                Widget controlContainer(Widget child) {
+                  return child;
+                }
+
+                const title = Text(
                   "Municipal Financial Dashboard",
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1000,117 +1113,158 @@ class _DashboardContentState extends State<DashboardContent>
                     fontWeight: FontWeight.bold,
                   ),
                 );
-                final actions = Wrap(
-                  spacing: 10,
-                  runSpacing: 12,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+                final actions = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SizedBox(
-                      width: 44,
-                      height: controlHeight,
-                      child: IconButton(
-                        onPressed: _isLoading ? null : _loadDashboardEntries,
-                        tooltip: "Refresh",
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.refresh, color: Colors.white),
-                      ),
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 44,
+                          height: controlHeight,
+                          child: IconButton(
+                            onPressed:
+                                _isLoading ? null : _loadDashboardEntries,
+                            tooltip: "Refresh",
+                            padding: EdgeInsets.zero,
+                            visualDensity: VisualDensity.compact,
+                            icon:
+                                const Icon(Icons.refresh, color: Colors.white),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        SizedBox(
+                          width: 44,
+                          height: controlHeight,
+                          child: IconButton(
+                            tooltip: 'Filters',
+                            padding: EdgeInsets.zero,
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.menu, color: Colors.white),
+                            onPressed: () async {
+                              final selected =
+                                  await showModalBottomSheet<String>(
+                                context: context,
+                                showDragHandle: true,
+                                builder: (sheetContext) {
+                                  const options = <(String, String)>[
+                                    ('Daily|All', 'Daily - All'),
+                                    ('Daily|Month', 'Daily - Month'),
+                                    ('Daily|Date', 'Daily - Date'),
+                                    ('Weekly|All', 'Weekly - All'),
+                                    ('Weekly|Month', 'Weekly - Month'),
+                                    ('Weekly|Date', 'Weekly - Date'),
+                                    ('Yearly|All', 'Yearly - All'),
+                                    ('Yearly|Month', 'Yearly - Month'),
+                                    ('Yearly|Date', 'Yearly - Date'),
+                                  ];
+                                  return SafeArea(
+                                    child: ListView.separated(
+                                      shrinkWrap: true,
+                                      itemCount: options.length,
+                                      separatorBuilder: (_, __) =>
+                                          const Divider(height: 1),
+                                      itemBuilder: (_, index) {
+                                        final opt = options[index];
+                                        final isActive = opt.$1 ==
+                                            '$_selectedRange|$_selectedPeriodType';
+                                        return ListTile(
+                                          dense: true,
+                                          title: Text(opt.$2),
+                                          trailing: isActive
+                                              ? const Icon(Icons.check)
+                                              : null,
+                                          onTap: () => Navigator.pop(
+                                            sheetContext,
+                                            opt.$1,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  );
+                                },
+                              );
+                              if (selected == null || !mounted) return;
+                              final parts = selected.split('|');
+                              if (parts.length != 2) return;
+                              setState(() {
+                                _selectedRange = parts[0];
+                                _selectedPeriodType = parts[1];
+                                if (_selectedPeriodType != 'Month') {
+                                  _selectedMonthKey = 'All';
+                                }
+                                if (_selectedPeriodType != 'Date') {
+                                  _selectedDateKey = 'All';
+                                }
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Container(
+                            height: controlHeight,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.90),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.35),
+                                  width: 1.2),
+                            ),
+                            child: DropdownButton<String>(
+                              isExpanded: true,
+                              value:
+                                  _categoryOptions.contains(_selectedCategory)
+                                      ? _selectedCategory
+                                      : null,
+                              underline: const SizedBox(),
+                              items: _categoryOptions
+                                  .map(
+                                    (e) => DropdownMenuItem(
+                                      value: e,
+                                      child: Text(
+                                        e,
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              selectedItemBuilder: (context) => _categoryOptions
+                                  .map(
+                                    (e) => Text(
+                                      e,
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (val) {
+                                if (val == null) return;
+                                setState(() => _selectedCategory = val);
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    Container(
-                      height: controlHeight,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: DropdownButton<String>(
-                        value: _selectedRange,
-                        underline: const SizedBox(),
-                        items: ["Daily", "Weekly", "Yearly"]
-                            .map((e) => DropdownMenuItem(
-                                  value: e,
-                                  child: Text(e),
-                                ))
-                            .toList(),
-                        onChanged: (val) {
-                          if (val == null) return;
-                          setState(() => _selectedRange = val);
-                        },
-                      ),
-                    ),
-                    Container(
-                      constraints: BoxConstraints(
-                        minWidth: compact ? 320 : 220,
-                      ),
-                      height: controlHeight,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: DropdownButton<String>(
-                        value: _selectedCategory,
-                        underline: const SizedBox(),
-                        items: _categoryOptions
-                            .map(
-                              (e) => DropdownMenuItem(
-                                value: e,
-                                child: Text(
-                                  e,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (val) {
-                          if (val == null) return;
-                          setState(() => _selectedCategory = val);
-                        },
-                      ),
-                    ),
-                    Container(
-                      constraints: BoxConstraints(
-                        minWidth: compact ? 160 : 120,
-                      ),
-                      height: controlHeight,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: DropdownButton<String>(
-                        value: _selectedPeriodType,
-                        underline: const SizedBox(),
-                        items: const ['All', 'Month', 'Date']
-                            .map(
-                              (e) => DropdownMenuItem(
-                                value: e,
-                                child: Text(e),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (val) {
-                          if (val == null) return;
-                          setState(() {
-                            _selectedPeriodType = val;
-                            if (val != 'Month') _selectedMonthKey = 'All';
-                            if (val != 'Date') _selectedDateKey = 'All';
-                          });
-                        },
-                      ),
-                    ),
-                    if (_selectedPeriodType == 'Month')
+                    if (_selectedPeriodType == 'Month') ...[
+                      const SizedBox(height: 10),
                       Container(
                         constraints: BoxConstraints(
-                          minWidth: compact ? 220 : 180,
+                          minWidth: compact ? 0 : 180,
                         ),
                         height: controlHeight,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
+                          color: Colors.white.withValues(alpha: 0.90),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.35),
+                              width: 1.2),
                         ),
                         child: DropdownButton<String>(
+                          isExpanded: true,
                           value: _monthOptions.contains(_selectedMonthKey)
                               ? _selectedMonthKey
                               : 'All',
@@ -1132,18 +1286,24 @@ class _DashboardContentState extends State<DashboardContent>
                           },
                         ),
                       ),
-                    if (_selectedPeriodType == 'Date')
+                    ],
+                    if (_selectedPeriodType == 'Date') ...[
+                      const SizedBox(height: 10),
                       Container(
                         constraints: BoxConstraints(
-                          minWidth: compact ? 220 : 180,
+                          minWidth: compact ? 0 : 180,
                         ),
                         height: controlHeight,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
+                          color: Colors.white.withValues(alpha: 0.90),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.35),
+                              width: 1.2),
                         ),
                         child: DropdownButton<String>(
+                          isExpanded: true,
                           value: _dateOptions.contains(_selectedDateKey)
                               ? _selectedDateKey
                               : 'All',
@@ -1165,6 +1325,7 @@ class _DashboardContentState extends State<DashboardContent>
                           },
                         ),
                       ),
+                    ],
                   ],
                 );
 
@@ -1174,7 +1335,10 @@ class _DashboardContentState extends State<DashboardContent>
                     children: [
                       title,
                       const SizedBox(height: 12),
-                      actions,
+                      SizedBox(
+                        width: double.infinity,
+                        child: actions,
+                      ),
                     ],
                   );
                 }
@@ -1184,7 +1348,10 @@ class _DashboardContentState extends State<DashboardContent>
                   children: [
                     Expanded(child: title),
                     const SizedBox(width: 12),
-                    actions,
+                    SizedBox(
+                      width: (constraints.maxWidth * 0.62).clamp(320.0, 760.0),
+                      child: actions,
+                    ),
                   ],
                 );
               },
@@ -1196,7 +1363,7 @@ class _DashboardContentState extends State<DashboardContent>
           // ===============================
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(30),
+              padding: const EdgeInsets.all(26),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1211,6 +1378,8 @@ class _DashboardContentState extends State<DashboardContent>
                   if (!_isLoading)
                     Column(
                       children: [
+                        _buildReceiptCountCard(receiptCount),
+                        const SizedBox(height: 16),
                         if (isAllCategory) ...[
                           _buildHighLowCategoryCards(categoryTotals),
                           const SizedBox(height: 16),
@@ -1288,6 +1457,70 @@ class _DashboardContentState extends State<DashboardContent>
     );
   }
 
+  Widget _buildReceiptCountCard(int count) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 220, maxWidth: 360),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          gradient: const LinearGradient(
+            colors: [Color(0x193BB3FD), Color(0x0F3BB3FD)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(
+            color: const Color(0x663BB3FD),
+            width: 1.1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: const Color(0x1F3BB3FD),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.receipt_long,
+                color: Color(0xFF1B5E94),
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Your Receipts',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: _navy800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$count',
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: _navy900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildGraphCard(
     String title,
     Widget chart, {
@@ -1301,9 +1534,9 @@ class _DashboardContentState extends State<DashboardContent>
           left: 8,
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(28),
               gradient: const LinearGradient(
-                colors: [Color(0xFFDBE9FF), Color(0xFFFFE3EC)],
+                colors: [Color(0xFFD9E8FF), Color(0xFFEFF5FF)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -1311,23 +1544,23 @@ class _DashboardContentState extends State<DashboardContent>
           ),
         ),
         ClipRRect(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(28),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            filter: ImageFilter.blur(sigmaX: 26, sigmaY: 26),
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    _glassWhite.withValues(alpha: 0.84),
-                    _glassWhite.withValues(alpha: 0.60),
+                    _glassWhite.withValues(alpha: 0.88),
+                    _glassWhite.withValues(alpha: 0.64),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(28),
                 border: Border.all(
-                  color: const Color(0xFFFFA8A8).withValues(alpha: 0.35),
-                  width: 1.1,
+                  color: const Color(0xFF9EBEFF),
+                  width: 1.6,
                 ),
                 boxShadow: [
                   BoxShadow(
@@ -1385,8 +1618,7 @@ class _DashboardContentState extends State<DashboardContent>
           for (var i = 0; i < entries.length; i++)
             PieChartSectionData(
               value: entries[i].value,
-              color:
-                  _categoryColor(entries[i].key, i).withValues(alpha: 0.55),
+              color: _categoryColor(entries[i].key, i).withValues(alpha: 0.55),
               title: '',
               radius: 86,
             ),
@@ -1595,69 +1827,70 @@ class _DashboardContentState extends State<DashboardContent>
                 ),
               ),
               child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    category,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration:
+                            BoxDecoration(color: color, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          category,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: _navy800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'PHP ${amount.toStringAsFixed(2)}',
                     style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: _navy800,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: _navy900,
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'PHP ${amount.toStringAsFixed(2)}',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: _navy900,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              '${percent.toStringAsFixed(1)}% of total',
-              style: TextStyle(
-                fontSize: 11,
-                color: _navy800.withValues(alpha: 0.72),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              top == null ? 'Top Nature: -' : 'Top Nature: ${top.nature}',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                color: _navy800.withValues(alpha: 0.82),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            if (top != null)
-              Text(
-                'Top Amount: PHP ${top.amount.toStringAsFixed(2)}',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: _navy800.withValues(alpha: 0.70),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-          ],
+                  const SizedBox(height: 2),
+                  Text(
+                    '${percent.toStringAsFixed(1)}% of total',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: _navy800.withValues(alpha: 0.72),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    top == null ? 'Top Nature: -' : 'Top Nature: ${top.nature}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: _navy800.withValues(alpha: 0.82),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (top != null)
+                    Text(
+                      'Top Amount: PHP ${top.amount.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: _navy800.withValues(alpha: 0.70),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -1677,7 +1910,8 @@ class _DashboardContentState extends State<DashboardContent>
         displaySpots.map((e) => e.y).fold<double>(0, (a, b) => a > b ? a : b);
     final base = primaryColor ?? _cyan500;
     final hsl = HSLColor.fromColor(base);
-    final top = hsl.withLightness((hsl.lightness + 0.14).clamp(0.0, 1.0)).toColor();
+    final top =
+        hsl.withLightness((hsl.lightness + 0.14).clamp(0.0, 1.0)).toColor();
     final lineGradient = LinearGradient(
       colors: [base, top],
       begin: Alignment.bottomCenter,

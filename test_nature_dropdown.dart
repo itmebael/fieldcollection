@@ -218,7 +218,7 @@ class _NatureDropdownTestState extends State<NatureDropdownTest> {
                     const SizedBox(height: 8),
                     const Text('Available Natures List:'),
                     ..._availableNatures.map((nature) => 
-                      Text('- ${nature['nature_of_collection']}: ₱${nature['amount']}')).toList(),
+                      Text('- ${nature['nature_of_collection']}: ₱${nature['amount']}')),
                   ],
                 ),
               ),

@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+const Color _adminHeaderBg = Color(0xFF1E3A5F);
+const Color _adminHeaderText = Color(0xFFFFFFFF);
+const Color _adminHeaderBorder = Color(0xFF1E3A5F);
+const Color _adminUiBorder = Color(0xFF1E3A5F);
+
 class AdminUserManagementScreen extends StatefulWidget {
   const AdminUserManagementScreen({super.key});
 
@@ -271,7 +276,9 @@ class _AdminUserManagementScreenState extends State<AdminUserManagementScreen> {
       final avatarPath =
           '$userId/avatar_${DateTime.now().millisecondsSinceEpoch}.$ext';
 
-      await Supabase.instance.client.storage.from('profile-pictures').uploadBinary(
+      await Supabase.instance.client.storage
+          .from('profile-pictures')
+          .uploadBinary(
             avatarPath,
             bytes,
             fileOptions: const FileOptions(upsert: true),
@@ -326,7 +333,7 @@ class _AdminUserManagementScreenState extends State<AdminUserManagementScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFDDE4EE)),
+          border: Border.all(color: _adminUiBorder),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
@@ -483,185 +490,222 @@ class _AdminUserManagementScreenState extends State<AdminUserManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F8FF),
       appBar: AppBar(
-        title: const Text('User Accounts'),
-        backgroundColor: const Color(0xFF14345C),
+        title: const Text(
+          'User Accounts',
+          style: TextStyle(color: _adminHeaderText),
+        ),
+        backgroundColor: _adminHeaderBg,
+        foregroundColor: _adminHeaderText,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shape: const Border(
+          bottom: BorderSide(color: _adminHeaderBorder),
+        ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Card(
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Form(
-                  key: _formKey,
-                  child: Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      SizedBox(
-                        width: 280,
-                        child: TextFormField(
-                          controller: _fullNameController,
-                          decoration: const InputDecoration(
-                            labelText: 'Full Name',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Enter full name';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                      SizedBox(
-                        width: 280,
-                        child: TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          decoration: const InputDecoration(
-                            labelText: 'Email',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            final text = value?.trim() ?? '';
-                            if (text.isEmpty) return 'Enter email';
-                            if (!text.contains('@')) return 'Enter valid email';
-                            return null;
-                          },
-                        ),
-                      ),
-                      SizedBox(
-                        width: 280,
-                        child: TextFormField(
-                          controller: _passwordController,
-                          obscureText: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Password',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().length < 8) {
-                              return 'Minimum 8 characters';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                      SizedBox(
-                        width: 180,
-                        child: DropdownButtonFormField<String>(
-                          value: _selectedRole,
-                          decoration: const InputDecoration(
-                            labelText: 'Role',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'staff',
-                              child: Text('Staff'),
+        child: Theme(
+          data: Theme.of(context).copyWith(
+            inputDecorationTheme: const InputDecorationTheme(
+              border: OutlineInputBorder(
+                borderSide: BorderSide(color: _adminUiBorder),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: _adminUiBorder),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: _adminUiBorder, width: 1.5),
+              ),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: _adminUiBorder),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Form(
+                    key: _formKey,
+                    child: Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        SizedBox(
+                          width: 280,
+                          child: TextFormField(
+                            controller: _fullNameController,
+                            decoration: const InputDecoration(
+                              labelText: 'Full Name',
+                              border: OutlineInputBorder(),
                             ),
-                            DropdownMenuItem(
-                              value: 'admin',
-                              child: Text('Admin'),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Enter full name';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: 280,
+                          child: TextFormField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            decoration: const InputDecoration(
+                              labelText: 'Email',
+                              border: OutlineInputBorder(),
                             ),
-                          ],
-                          onChanged: (value) {
-                            if (value == null) return;
-                            setState(() => _selectedRole = value);
-                          },
+                            validator: (value) {
+                              final text = value?.trim() ?? '';
+                              if (text.isEmpty) return 'Enter email';
+                              if (!text.contains('@')) {
+                                return 'Enter valid email';
+                              }
+                              return null;
+                            },
+                          ),
                         ),
-                      ),
-                      SizedBox(
-                        width: 220,
-                        child: SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Email Confirmed'),
-                          value: _emailConfirm,
-                          onChanged: (value) {
-                            setState(() => _emailConfirm = value);
-                          },
+                        SizedBox(
+                          width: 280,
+                          child: TextFormField(
+                            controller: _passwordController,
+                            obscureText: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Password',
+                              border: OutlineInputBorder(),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().length < 8) {
+                                return 'Minimum 8 characters';
+                              }
+                              return null;
+                            },
+                          ),
                         ),
-                      ),
-                      SizedBox(
-                        width: 180,
-                        child: ElevatedButton.icon(
-                          onPressed: _isCreating ? null : _createUser,
-                          icon: _isCreating
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.person_add),
-                          label:
-                              Text(_isCreating ? 'Creating...' : 'Create User'),
+                        SizedBox(
+                          width: 180,
+                          child: DropdownButtonFormField<String>(
+                            value: _selectedRole,
+                            decoration: const InputDecoration(
+                              labelText: 'Role',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'staff',
+                                child: Text('Staff'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'admin',
+                                child: Text('Admin'),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setState(() => _selectedRole = value);
+                            },
+                          ),
                         ),
-                      ),
-                    ],
+                        SizedBox(
+                          width: 220,
+                          child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Email Confirmed'),
+                            value: _emailConfirm,
+                            onChanged: (value) {
+                              setState(() => _emailConfirm = value);
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: 180,
+                          child: ElevatedButton.icon(
+                            onPressed: _isCreating ? null : _createUser,
+                            icon: _isCreating
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.person_add),
+                            label: Text(
+                                _isCreating ? 'Creating...' : 'Create User'),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                const Text(
-                  'Recent Accounts',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: _isLoadingUsers ? null : _loadUsers,
-                  icon: const Icon(Icons.refresh),
-                  tooltip: 'Refresh',
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: Card(
-                elevation: 2,
-                child: _isLoadingUsers
-                    ? const Center(child: CircularProgressIndicator())
-                    : _users.isEmpty
-                        ? const Center(
-                            child: Text('No users found or no access.'))
-                        : LayoutBuilder(
-                            builder: (context, constraints) {
-                              final width = constraints.maxWidth;
-                              int crossAxisCount = 1;
-                              if (width >= 1200) {
-                                crossAxisCount = 3;
-                              } else if (width >= 760) {
-                                crossAxisCount = 2;
-                              }
-
-                              return GridView.builder(
-                                padding: const EdgeInsets.all(12),
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: crossAxisCount,
-                                  childAspectRatio: 2.9,
-                                  crossAxisSpacing: 10,
-                                  mainAxisSpacing: 10,
-                                ),
-                                itemCount: _users.length,
-                                itemBuilder: (context, index) {
-                                  return _buildRecentAccountCard(_users[index]);
-                                },
-                              );
-                            },
-                          ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  const Text(
+                    'Recent Accounts',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: _isLoadingUsers ? null : _loadUsers,
+                    icon: const Icon(Icons.refresh),
+                    tooltip: 'Refresh',
+                  ),
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Expanded(
+                child: Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: _adminUiBorder),
+                  ),
+                  child: _isLoadingUsers
+                      ? const Center(child: CircularProgressIndicator())
+                      : _users.isEmpty
+                          ? const Center(
+                              child: Text('No users found or no access.'))
+                          : LayoutBuilder(
+                              builder: (context, constraints) {
+                                final width = constraints.maxWidth;
+                                int crossAxisCount = 1;
+                                if (width >= 1200) {
+                                  crossAxisCount = 3;
+                                } else if (width >= 760) {
+                                  crossAxisCount = 2;
+                                }
+
+                                return GridView.builder(
+                                  padding: const EdgeInsets.all(12),
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: crossAxisCount,
+                                    childAspectRatio: 2.9,
+                                    crossAxisSpacing: 10,
+                                    mainAxisSpacing: 10,
+                                  ),
+                                  itemCount: _users.length,
+                                  itemBuilder: (context, index) {
+                                    return _buildRecentAccountCard(
+                                        _users[index]);
+                                  },
+                                );
+                              },
+                            ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

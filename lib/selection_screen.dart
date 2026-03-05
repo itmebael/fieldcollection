@@ -1,16 +1,15 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'access_control_service.dart';
 import 'dashboard.dart';
 import 'user_dashboard.dart';
 import 'session_service.dart';
-import 'category_constants.dart';
 
 class CategorySelectionScreen extends StatefulWidget {
   final bool isAdmin;
 
-  const CategorySelectionScreen({Key? key, required this.isAdmin})
-      : super(key: key);
+  const CategorySelectionScreen({super.key, required this.isAdmin});
 
   @override
   _CategorySelectionScreenState createState() =>
@@ -20,6 +19,7 @@ class CategorySelectionScreen extends StatefulWidget {
 class _CategorySelectionScreenState extends State<CategorySelectionScreen>
     with TickerProviderStateMixin {
   String? _selectedCategory;
+  AccessControlPolicy _policy = AccessControlPolicy.fullAccess();
   late PageController _pageController;
   int _currentPage = 0;
   Color _backgroundColor = const Color(0xFFF4F8FB); // Default background
@@ -29,25 +29,25 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen>
     {
       'title': 'Marine',
       'description': 'Marine and fisheries operations',
-      'color': Color.fromARGB(255, 117, 220, 121),
-      'primaryColor': Color(0xFF2E7D32),
-      'accentColor': Color(0xFFA5D6A7),
+      'color': const Color.fromARGB(255, 117, 220, 121),
+      'primaryColor': const Color(0xFF2E7D32),
+      'accentColor': const Color(0xFFA5D6A7),
       'icon': 'assets/breakfast.png',
     },
     {
       'title': 'Slaughter',
       'description': 'Meat and slaughterhouse operations',
-      'color': Color.fromARGB(255, 255, 122, 113),
-      'primaryColor': Color(0xFFD32F2F),
-      'accentColor': Color(0xFFFFB197),
+      'color': const Color.fromARGB(255, 255, 122, 113),
+      'primaryColor': const Color(0xFFD32F2F),
+      'accentColor': const Color(0xFFFFB197),
       'icon': 'assets/dinner.png',
     },
     {
       'title': 'Rent',
       'description': 'Rental and property operations',
-      'color': Color.fromARGB(255, 84, 238, 90),
-      'primaryColor': Color(0xFF388E3C),
-      'accentColor': Color(0xFFA9FFB5),
+      'color': const Color.fromARGB(255, 84, 238, 90),
+      'primaryColor': const Color(0xFF388E3C),
+      'accentColor': const Color(0xFFA9FFB5),
       'icon': 'assets/lunch.png',
     },
   ];
@@ -66,63 +66,76 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen>
   }
 
   Future<void> _navigateToDashboard() async {
-    if (_selectedCategory != null) {
-      // Navigate to appropriate dashboard based on user role
-      if (widget.isAdmin) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const MainNavigation()),
-        );
-      } else {
-        await SessionService.saveUserSession(_selectedCategory!);
-        if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => UserDashboardNavigation(
-              selectedCategory: _selectedCategory!,
-            ),
+    final selected = _selectedCategory?.trim();
+    if (selected == null || selected.isEmpty) return;
+    final latestPolicy = await AccessControlService.getCurrentUserPolicy();
+    if (!AccessControlService.isCategoryAllowed(latestPolicy, selected)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This category is not allowed for your account.'),
+        ),
+      );
+      return;
+    }
+
+    if (widget.isAdmin) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MainNavigation(selectedCategory: selected),
+        ),
+      );
+    } else {
+      await SessionService.saveUserSession(selected);
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => UserDashboardNavigation(
+            selectedCategory: selected,
           ),
-        );
-      }
+        ),
+      );
     }
   }
 
   Color _baseColorForCategory(String category) {
-    final v = category.toLowerCase().trim();
-    if (v == 'business permit fees' || v.contains('business permit')) {
-      return const Color(0xFFFF9800); // Orange
-    }
-    if (v == 'inspection fees' || v.contains('inspection')) {
-      return const Color(0xFF8E24AA); // Violet
-    }
-    if (v == 'other economic enterprises' || v.contains('other economic')) {
-      return const Color(0xFFFFEB3B); // Yellow
-    }
-    if (v == 'other service income' || v.contains('other service')) {
-      return const Color(0xFF9E9E9E); // Gray
-    }
-    if (v == 'parking and terminal fees' || v.contains('parking and terminal')) {
-      return const Color(0xFFEC407A); // Pink
-    }
-    if (v == 'amusement tax/' ||
-        v == 'amusement tax' ||
-        v.contains('amusement tax')) {
-      return const Color(0xFF9ACD32); // Yellow-green
-    }
-    if (v.contains('marine') || v.contains('fish') || v.contains('sea')) {
-      return const Color(0xFF2E7D32); // Green
-    }
-    if (v.contains('slaughter') || v.contains('katayan')) {
-      return const Color(0xFFD32F2F); // Red
-    }
-    if (v.contains('rent') || v.contains('rental')) {
-      return const Color(0xFF2E7D32); // Green
-    }
-    if (v.contains('market') && v.contains('operation')) {
-      return const Color(0xFFEF6C00); // Orange
-    }
-    return const Color(0xFF455A64); // Default blue-grey
+    final v = _normalizedCategoryText(category);
+    final colorMap = <String, Color>{
+      _normalizedCategoryText('A. INTERNAL REVENUE ALLOTMENT'):
+          const Color(0xFF1E3A8A), // Royal Blue
+      _normalizedCategoryText('A. REGULATORY FEES (Permits and Licenses)'):
+          const Color(0xFF059669), // Emerald Green
+      _normalizedCategoryText('A. SPECIAL EDUCATION TAX'):
+          const Color(0xFF7C3AED), // Purple
+      _normalizedCategoryText('B. OTHER SHARES FROM NATIONAL TAX COLLECTIONS'):
+          const Color(0xFFEA580C), // Orange
+      _normalizedCategoryText('B. SERVICE/USER CHARGES (Service Income)'):
+          const Color(0xFFD97706), // Gold
+      _normalizedCategoryText('B. TAX ON BUSINESS'):
+          const Color(0xFFDC2626), // Red
+      _normalizedCategoryText('C. EXTRAORDINARY RECEIPTS/DONATIONS/AIDS'):
+          const Color(0xFF0EA5E9), // Sky Blue
+      _normalizedCategoryText('C. OTHER TAXES'):
+          const Color(0xFF92400E), // Brown
+      _normalizedCategoryText(
+              'C. RECEIPTS FROM ECONOMIC ENTERPRISES (Business Income)'):
+          const Color(0xFFDB2777), // Pink
+      _normalizedCategoryText('D. INTER-LOCAL TRANSFER'):
+          const Color(0xFF374151), // Charcoal
+      _normalizedCategoryText(
+              'D. OTHER INCOME/ RECEIPTS (Other General Income)'):
+          const Color(0xFF65A30D), // Lime Green
+      _normalizedCategoryText('E. CAPITAL/INVESTMENT RECEIPTS'):
+          const Color(0xFF0F766E), // Teal
+      _normalizedCategoryText('F. RECEIPTS FROM LOAN AND BORROWINGS (PAYABLE)'):
+          const Color(0xFF4F46E5), // Indigo
+      _normalizedCategoryText('G. OTHER NON-INCOME RECEIPTS'):
+          const Color(0xFF525252), // Dark Gray
+    };
+
+    return colorMap[v] ?? const Color(0xFF455A64);
   }
 
   Color _colorForCategory(String category) {
@@ -210,8 +223,11 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen>
     setState(() => _isLoadingCategories = true);
     try {
       final client = Supabase.instance.client;
-      final natureRows = await client.from('receipt_natures').select('category');
-      final receiptRows = await client.from('receipts').select('category');
+      final policy = await AccessControlService.getCurrentUserPolicy();
+      final natureRows = await client
+          .from('NatureParticular')
+          .select('Category, NATURECATID')
+          .order('SEQ');
 
       final seen = <String>{};
       final ordered = <String>[];
@@ -219,24 +235,26 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen>
       void addCategory(dynamic raw) {
         final c = (raw ?? '').toString().trim();
         if (c.isEmpty) return;
+        final lower = c.toLowerCase();
+        if (lower == 'null') return;
+        if (RegExp(r'^\d+(\.\d+)?$').hasMatch(c)) return;
         final key = c.toLowerCase();
         if (seen.add(key)) ordered.add(c);
       }
 
       for (final row in List<Map<String, dynamic>>.from(natureRows)) {
-        addCategory(row['category']);
-      }
-      for (final row in List<Map<String, dynamic>>.from(receiptRows)) {
-        addCategory(row['category']);
+        addCategory(row['Category']);
+        addCategory(row['NATURECATID']);
       }
 
-      if (ordered.isEmpty) {
-        ordered.addAll(CategoryConstants.categories);
-      } else {
+      if (ordered.isNotEmpty) {
         ordered.sort();
       }
+      final filteredOrdered = ordered
+          .where((c) => AccessControlService.isCategoryAllowed(policy, c))
+          .toList();
 
-      final categories = ordered
+      final categories = filteredOrdered
           .map((c) => <String, dynamic>{
                 'title': c,
                 'description': _descriptionForCategory(c),
@@ -249,29 +267,26 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen>
 
       if (!mounted) return;
       setState(() {
+        _policy = policy;
         _categories = categories;
         _currentPage = 0;
-        _selectedCategory = _categories.first['title'] as String;
-        _backgroundColor = _categories.first['color'] as Color;
+        if (_categories.isNotEmpty) {
+          _selectedCategory = _categories.first['title'] as String;
+          _backgroundColor = _categories.first['color'] as Color;
+        } else {
+          _selectedCategory = null;
+          _backgroundColor = const Color(0xFFF4F8FB);
+        }
         _isLoadingCategories = false;
       });
-    } catch (_) {
-      final categories = CategoryConstants.categories
-          .map((c) => <String, dynamic>{
-                'title': c,
-                'description': _descriptionForCategory(c),
-                'color': _colorForCategory(c),
-                'primaryColor': _primaryColorForCategory(c),
-                'accentColor': _accentColorForCategory(c),
-                'icon': _iconForCategory(c),
-              })
-          .toList();
+    } catch (e) {
+      debugPrint('Failed to load categories from NatureParticular: $e');
       if (!mounted) return;
       setState(() {
-        _categories = categories;
+        _categories = <Map<String, dynamic>>[];
         _currentPage = 0;
-        _selectedCategory = _categories.first['title'] as String;
-        _backgroundColor = _categories.first['color'] as Color;
+        _selectedCategory = null;
+        _backgroundColor = const Color(0xFFF4F8FB);
         _isLoadingCategories = false;
       });
     }
@@ -329,58 +344,84 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen>
                   Expanded(
                     child: _isLoadingCategories
                         ? const Center(child: CircularProgressIndicator())
-                        : AnimatedBuilder(
-                            animation: _pageController,
-                            builder: (context, _) {
-                              final page = _pageController.hasClients
-                                  ? (_pageController.page ?? _currentPage.toDouble())
-                                  : _currentPage.toDouble();
-                              return PageView.builder(
-                                controller: _pageController,
-                                padEnds: true,
-                                itemCount: _categories.length,
-                                onPageChanged: (index) {
-                                  setState(() {
-                                    _currentPage = index;
-                                    _selectedCategory =
-                                        _categories[index]['title'];
-                                    _backgroundColor = _categories[index]['color'];
-                                  });
-                                },
-                                itemBuilder: (context, index) {
-                                  final categoryData = _categories[index];
-                                  final distance = (page - index).abs();
-                                  final t = distance.clamp(0.0, 1.0).toDouble();
-                                  final scale = 1.0 - (0.20 * t);
-                                  final opacity = 1.0 - (0.42 * t);
-                                  final verticalShift = 24.0 * t;
-                                  final rotateY = (page - index) * 0.24;
-                                  final isCenter = distance < 0.5;
+                        : _categories.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      _policy.allowAllCategories
+                                          ? 'No categories found in NatureParticular.'
+                                          : 'No category access assigned to your account.',
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 10),
+                                    OutlinedButton.icon(
+                                      onPressed: _loadCategories,
+                                      icon: const Icon(Icons.refresh),
+                                      label: const Text('Reload categories'),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : AnimatedBuilder(
+                                animation: _pageController,
+                                builder: (context, _) {
+                                  final page = _pageController.hasClients
+                                      ? (_pageController.page ??
+                                          _currentPage.toDouble())
+                                      : _currentPage.toDouble();
+                                  return PageView.builder(
+                                    controller: _pageController,
+                                    padEnds: true,
+                                    itemCount: _categories.length,
+                                    onPageChanged: (index) {
+                                      setState(() {
+                                        _currentPage = index;
+                                        _selectedCategory =
+                                            _categories[index]['title'];
+                                        _backgroundColor =
+                                            _categories[index]['color'];
+                                      });
+                                    },
+                                    itemBuilder: (context, index) {
+                                      final categoryData = _categories[index];
+                                      final distance = (page - index).abs();
+                                      final t =
+                                          distance.clamp(0.0, 1.0).toDouble();
+                                      final scale = 1.0 - (0.20 * t);
+                                      final opacity = 1.0 - (0.42 * t);
+                                      final verticalShift = 24.0 * t;
+                                      final rotateY = (page - index) * 0.24;
+                                      final isCenter = distance < 0.5;
 
-                                  return Opacity(
-                                    opacity: opacity.clamp(0.50, 1.0).toDouble(),
-                                    child: Transform(
-                                      alignment: Alignment.center,
-                                      transform: Matrix4.identity()
-                                        ..setEntry(3, 2, 0.0012)
-                                        ..translate(0.0, verticalShift)
-                                        ..rotateY(rotateY),
-                                      child: Transform.scale(
-                                        scale: scale.clamp(0.80, 1.0).toDouble(),
-                                        child: Align(
-                                          child: _buildCategoryCard(
-                                            categoryData,
-                                            isCenter,
-                                            cardWidth,
+                                      return Opacity(
+                                        opacity:
+                                            opacity.clamp(0.50, 1.0).toDouble(),
+                                        child: Transform(
+                                          alignment: Alignment.center,
+                                          transform: Matrix4.identity()
+                                            ..setEntry(3, 2, 0.0012)
+                                            ..translate(0.0, verticalShift)
+                                            ..rotateY(rotateY),
+                                          child: Transform.scale(
+                                            scale: scale
+                                                .clamp(0.80, 1.0)
+                                                .toDouble(),
+                                            child: Align(
+                                              child: _buildCategoryCard(
+                                                categoryData,
+                                                isCenter,
+                                                cardWidth,
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ),
+                                      );
+                                    },
                                   );
                                 },
-                              );
-                            },
-                          ),
+                              ),
                   ),
                   SizedBox(height: isShort ? 16 : 24),
                   _buildPageIndicator(),
@@ -426,7 +467,7 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen>
         primary.withValues(alpha: 0.8);
     final iconPath = (categoryData['icon'] ?? '').toString();
     final iconScale = iconPath.toLowerCase().endsWith('manok.png') ? 1.0 : 1.5;
-    final double circleSize = 84;
+    const double circleSize = 84;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
@@ -629,10 +670,10 @@ class _CategorySelectionScreenState extends State<CategorySelectionScreen>
       children: _categories.map((categoryData) {
         final index = _categories.indexOf(categoryData);
         return AnimatedContainer(
-          duration: Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 300),
           width: _currentPage == index ? 20 : 8,
           height: 8,
-          margin: EdgeInsets.symmetric(horizontal: 4),
+          margin: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(4),
             color: _currentPage == index

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'theme/glass_theme_widgets.dart';
 import 'reciept.dart';
+import 'category_theme_color.dart';
 
 enum HistoryFilter {
   all,
@@ -33,37 +35,7 @@ class _UserReceiptHistoryPageState extends State<UserReceiptHistoryPage> {
   final GlobalKey _filterMenuKey = GlobalKey();
 
   Color _themeColorForCategory(String category) {
-    final v = category.toLowerCase().trim();
-    if (v == 'business permit fees' || v.contains('business permit')) {
-      return const Color(0xFFFF9800);
-    }
-    if (v == 'inspection fees' || v.contains('inspection')) {
-      return const Color(0xFF8E24AA);
-    }
-    if (v == 'other economic enterprises' || v.contains('other economic')) {
-      return const Color(0xFFFFEB3B);
-    }
-    if (v == 'other service income' || v.contains('other service')) {
-      return const Color(0xFF9E9E9E);
-    }
-    if (v == 'parking and terminal fees' || v.contains('parking and terminal')) {
-      return const Color(0xFFEC407A);
-    }
-    if (v == 'amusement tax/' ||
-        v == 'amusement tax' ||
-        v.contains('amusement tax')) {
-      return const Color(0xFF9ACD32);
-    }
-    if (v == 'slaughter' || v == 'slaugther' || v.contains('slaugh')) {
-      return const Color(0xFFD32F2F);
-    }
-    if (v == 'rent' || v == 'renta' || v.contains('rent')) {
-      return const Color(0xFF2E7D32);
-    }
-    if (v == 'marine' || v.contains('marine') || v.contains('fish')) {
-      return const Color(0xFF2E7D32);
-    }
-    return const Color(0xFF1E3A5F);
+    return categoryThemeColor(category);
   }
 
   @override
@@ -78,29 +50,98 @@ class _UserReceiptHistoryPageState extends State<UserReceiptHistoryPage> {
 
     try {
       final range = _resolveRange();
-      final base = Supabase.instance.client.from('receipt_print_logs').select(
-            'id, printed_at, category, marine_flow, serial_no, receipt_date, payor, officer, total_amount, collection_items',
-          );
-      final data = _filter == HistoryFilter.all
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+      if (userId == null || userId.isEmpty) {
+        throw Exception('No authenticated user.');
+      }
+      final base = client
+          .from('print_receipts')
+          .select(
+            'id, receipt_no, payor, payment_method, receipt_date, printed_at, total_amount',
+          )
+          .eq('owner_id', userId);
+      final response = _filter == HistoryFilter.all
           ? await base.order('printed_at', ascending: false)
           : await base
               .gte('printed_at', range.$1.toIso8601String())
               .lte('printed_at', range.$2.toIso8601String())
               .order('printed_at', ascending: false);
+      final headers = List<Map<String, dynamic>>.from(response);
       if (!mounted) return;
-      final rows = List<Map<String, dynamic>>.from(data).map((row) {
-        // Normalize print-log fields to receipt keys expected by preview UI.
-        return <String, dynamic>{
-          ...row,
-          'saved_at': row['printed_at'],
-          'price': row['total_amount'],
-          'nature_of_collection': _firstNatureFromItems(row['collection_items']),
+      final receiptIds = headers
+          .map((e) => (e['id'] ?? '').toString())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      final itemsByReceipt = <String, List<Map<String, dynamic>>>{};
+      if (receiptIds.isNotEmpty) {
+        try {
+          final itemRows = await Supabase.instance.client
+              .from('print_receipt_items')
+              .select(
+                  'receipt_id, line_no, "Category", nature, "SubNature", "AcctNo", amount')
+              .inFilter('receipt_id', receiptIds)
+              .order('line_no');
+          for (final raw in List<Map<String, dynamic>>.from(itemRows)) {
+            final receiptId = (raw['receipt_id'] ?? '').toString();
+            if (receiptId.isEmpty) continue;
+            final nature = (raw['nature'] ?? '').toString().trim();
+            final subNature = (raw['SubNature'] ?? '').toString().trim();
+            final label = subNature.isEmpty ? nature : '$nature - $subNature';
+            final amount = (raw['amount'] as num?)?.toDouble() ?? 0.0;
+            final item = <String, dynamic>{
+              'category': (raw['Category'] ?? '').toString().trim(),
+              'nature': label,
+              'nature_code': (raw['AcctNo'] ?? '').toString().trim(),
+              'amount': amount,
+              'price': amount,
+            };
+            itemsByReceipt.putIfAbsent(receiptId, () => []).add(item);
+          }
+        } catch (e) {
+          debugPrint('History item load failed: $e');
+        }
+      }
+      final normalizedCategory = widget.selectedCategory.trim().toLowerCase();
+      final applyCategoryFilter =
+          normalizedCategory.isNotEmpty && normalizedCategory != 'all';
+      final rows = <Map<String, dynamic>>[];
+      for (final header in headers) {
+        final receiptId = (header['id'] ?? '').toString();
+        final items = itemsByReceipt[receiptId] ?? <Map<String, dynamic>>[];
+        String category = '';
+        for (final item in items) {
+          final c = (item['category'] ?? '').toString().trim();
+          if (c.isNotEmpty) {
+            category = c;
+            break;
+          }
+        }
+        if (category.isEmpty) {
+          category = widget.selectedCategory.trim();
+        }
+        if (applyCategoryFilter &&
+            category.isNotEmpty &&
+            category.trim().toLowerCase() != normalizedCategory) {
+          continue;
+        }
+        final row = <String, dynamic>{
+          ...header,
+          'serial_no': (header['receipt_no'] ?? '').toString(),
+          'category': category,
+          'marine_flow': null,
+          'collection_items': items,
+          'saved_at': header['printed_at'],
+          'price': header['total_amount'],
+          'nature_of_collection': _firstNatureFromItems(items),
         };
-      }).toList();
+        rows.add(row);
+      }
       setState(() {
         _entries = rows;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('History load failed: $e');
       if (!mounted) return;
       setState(() {
         _entries = [];
@@ -318,9 +359,9 @@ class _UserReceiptHistoryPageState extends State<UserReceiptHistoryPage> {
     );
 
     return Scaffold(
-      backgroundColor: themeColor.withValues(alpha: 0.08),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Receipt History'),
+        title: const Text('Your Receipt History'),
         backgroundColor: themeColor,
         foregroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.white),
@@ -333,110 +374,119 @@ class _UserReceiptHistoryPageState extends State<UserReceiptHistoryPage> {
           ),
         ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _glassCard(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                        'Entries: ${_entries.length}',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: textColor,
+          const GlassScaffoldBackground(),
+          Column(
+            children: [
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _glassCard(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(
+                            'Entries: ${_entries.length}',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                              color: textColor,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _glassCard(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                        'Total: P ${total.toStringAsFixed(2)}',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: textColor,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _glassCard(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(
+                            'Total: P ${total.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                              color: textColor,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _entries.isEmpty
-                    ? const Center(child: Text('No entries found for this filter.'))
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                        itemCount: _entries.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) {
-                          final item = _entries[index];
-                          final amount = _resolveAmount(item);
-                          final serialNo = item['serial_no']?.toString().trim();
-                          return _glassCard(
-                            child: ListTile(
-                              leading: Icon(Icons.receipt_long, color: themeColor),
-                              title: Text(
-                                _resolveNature(item),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: textColor,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              subtitle: Text(
-                                'Category: ${item['category'] ?? '-'}\n'
-                                'Flow: ${item['marine_flow'] ?? '-'}\n'
-                                'Serial No: ${serialNo?.isNotEmpty == true ? serialNo : '-'}\n'
-                                'Date: ${_formatDate(item['saved_at'])}',
-                                style: TextStyle(
-                                  color: mutedTextColor,
-                                  fontSize: 14,
-                                  height: 1.35,
-                                ),
-                              ),
-                              trailing: Text(
-                                'P ${amount.toStringAsFixed(2)}',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: themeColor,
-                                ),
-                              ),
-                              isThreeLine: true,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => ReceiptScreen(
-                                      receiptData: item,
-                                      readOnly: true,
-                                      showSaveButton: false,
-                                      showViewReceiptsButton: false,
-                                      showPrintButton: false,
-                                      useFullWidth: true,
+              ),
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _entries.isEmpty
+                        ? const Center(
+                            child: Text('No entries found for this filter.'))
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                            itemCount: _entries.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final item = _entries[index];
+                              final amount = _resolveAmount(item);
+                              final serialNo =
+                                  item['serial_no']?.toString().trim();
+                              return _glassCard(
+                                child: ListTile(
+                                  leading: Icon(Icons.receipt_long,
+                                      color: themeColor),
+                                  title: Text(
+                                    _resolveNature(item),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: textColor,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
-                                );
-                              },
-                            ),
-                          );
-                        },
-                      ),
+                                  subtitle: Text(
+                                    'Category: ${item['category'] ?? '-'}\n'
+                                    'Flow: ${item['marine_flow'] ?? '-'}\n'
+                                    'Serial No: ${serialNo?.isNotEmpty == true ? serialNo : '-'}\n'
+                                    'Date: ${_formatDate(item['saved_at'])}',
+                                    style: TextStyle(
+                                      color: mutedTextColor,
+                                      fontSize: 14,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                  trailing: Text(
+                                    'P ${amount.toStringAsFixed(2)}',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: themeColor,
+                                    ),
+                                  ),
+                                  isThreeLine: true,
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ReceiptScreen(
+                                          receiptData: item,
+                                          readOnly: true,
+                                          showSaveButton: false,
+                                          showViewReceiptsButton: false,
+                                          showPrintButton: false,
+                                          useFullWidth: true,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+              ),
+            ],
           ),
         ],
       ),

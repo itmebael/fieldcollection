@@ -10,42 +10,64 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'reciept.dart';
 import 'language_service.dart';
 
+const Color _adminHeaderBg = Color(0xFF1E3A5F);
+const Color _adminHeaderText = Color(0xFFFFFFFF);
+const Color _adminHeaderBorder = Color(0xFF1E3A5F);
+const Color _adminUiBorder = Color(0xFF1E3A5F);
+
 class ReportsPage extends StatelessWidget {
   const ReportsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isCompact = width < 760;
+    final horizontalPadding = width < 560 ? 14.0 : (width < 1000 ? 20.0 : 50.0);
+    final verticalPadding = width < 560 ? 14.0 : (width < 1000 ? 20.0 : 40.0);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F6FA),
+      backgroundColor: const Color(0xFFF4F8FF),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E3A5F),
+        backgroundColor: _adminHeaderBg,
+        foregroundColor: _adminHeaderText,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shape: const Border(
+          bottom: BorderSide(color: _adminHeaderBorder),
+        ),
         title: Text(
           LanguageService.translate("Municipal Financial Dashboard"),
-          style: TextStyle(
-            color: Colors.white,
+          style: const TextStyle(
+            color: _adminHeaderText,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.5,
           ),
         ),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 25),
+            padding: EdgeInsets.only(right: isCompact ? 10 : 25),
             child: ElevatedButton.icon(
               icon: const Icon(Icons.picture_as_pdf),
-              label: Text(LanguageService.translate("Export")),
+              label: isCompact
+                  ? const SizedBox.shrink()
+                  : Text(LanguageService.translate("Export")),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: const Color(0xFF1E3A5F),
+                padding: EdgeInsets.symmetric(horizontal: isCompact ? 12 : 16),
               ),
               onPressed: () {},
             ),
           ),
         ],
       ),
-      body: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 50, vertical: 40),
-        child: _RealReportContent(),
+      body: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: horizontalPadding,
+          vertical: verticalPadding,
+        ),
+        child: const _RealReportContent(),
       ),
     );
   }
@@ -128,45 +150,81 @@ class _RealReportContentState extends State<_RealReportContent> {
     setState(() => isLoading = true);
     try {
       final client = Supabase.instance.client;
-      List<Map<String, dynamic>> data = [];
-      try {
-        final logs = await client
-            .from('receipt_print_logs')
+      final headers = await client
+          .from('print_receipts')
+          .select(
+            'id, receipt_no, payor, payment_method, receipt_date, printed_at, total_amount',
+          )
+          .order('printed_at', ascending: false);
+      final headerRows = List<Map<String, dynamic>>.from(headers);
+      final receiptIds = headerRows
+          .map((e) => (e['id'] ?? '').toString())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      final itemsByReceipt = <String, List<Map<String, dynamic>>>{};
+      if (receiptIds.isNotEmpty) {
+        final itemRows = await client
+            .from('print_receipt_items')
             .select(
-              'id, serial_no, category, marine_flow, printed_at, receipt_date, payor, officer, total_amount, collection_items, nature_code, payment_method',
-            )
-            .order('printed_at', ascending: false);
-        data = List<Map<String, dynamic>>.from(logs);
-      } catch (_) {
-        data = [];
-      }
-
-      if (data.isEmpty) {
-        try {
-          final receipts = await client
-              .from('receipts')
-              .select('*')
-              .order('saved_at', ascending: false);
-          data = List<Map<String, dynamic>>.from(receipts);
-        } catch (_) {
-          data = [];
+                'receipt_id, line_no, "Category", nature, "SubNature", "AcctNo", amount')
+            .inFilter('receipt_id', receiptIds)
+            .order('line_no');
+        for (final raw in List<Map<String, dynamic>>.from(itemRows)) {
+          final receiptId = (raw['receipt_id'] ?? '').toString();
+          if (receiptId.isEmpty) continue;
+          final nature = (raw['nature'] ?? '').toString().trim();
+          final subNature = (raw['SubNature'] ?? '').toString().trim();
+          final label = subNature.isEmpty ? nature : '$nature - $subNature';
+          final amount = (raw['amount'] as num?)?.toDouble() ?? 0.0;
+          final item = <String, dynamic>{
+            'category': (raw['Category'] ?? '').toString().trim(),
+            'nature': label,
+            'nature_code': (raw['AcctNo'] ?? '').toString().trim(),
+            'amount': amount,
+            'price': amount,
+          };
+          itemsByReceipt.putIfAbsent(receiptId, () => []).add(item);
         }
       }
       if (!mounted) return;
 
-      final rows = List<Map<String, dynamic>>.from(data).map((row) {
-        final normalizedDate = _extractDate(row);
-        return <String, dynamic>{
-          ...row,
-          // Normalize print-log row keys for existing table/preview UI
-          'saved_at': normalizedDate,
+      final rows = <Map<String, dynamic>>[];
+      for (final header in headerRows) {
+        final receiptId = (header['id'] ?? '').toString();
+        final items = itemsByReceipt[receiptId] ?? <Map<String, dynamic>>[];
+        String category = '';
+        final natureCodes = <String>{};
+        for (final item in items) {
+          final c = (item['category'] ?? '').toString().trim();
+          if (category.isEmpty && c.isNotEmpty) {
+            category = c;
+          }
+          final code = (item['nature_code'] ?? '').toString().trim();
+          if (code.isNotEmpty) natureCodes.add(code);
+        }
+        final totalAmount = (header['total_amount'] as num?)?.toDouble() ??
+            _extractAmount({
+              'collection_items': items,
+            });
+        final normalizedDate = _extractDate(header);
+        rows.add(<String, dynamic>{
+          'id': header['id'],
+          'serial_no': (header['receipt_no'] ?? '').toString(),
+          'category': category,
+          'marine_flow': null,
           'printed_at': normalizedDate,
-          'price': _extractAmount(row),
-          'total_amount': _extractAmount(row),
-          'nature_of_collection':
-              _firstNatureFromItems(row['collection_items']),
-        };
-      }).toList();
+          'receipt_date': header['receipt_date'],
+          'payor': header['payor'],
+          'officer': null,
+          'total_amount': totalAmount,
+          'collection_items': items,
+          'nature_code': natureCodes.isEmpty ? null : natureCodes.join(','),
+          'payment_method': header['payment_method'],
+          'saved_at': normalizedDate,
+          'price': totalAmount,
+          'nature_of_collection': _firstNatureFromItems(items),
+        });
+      }
       final monthSet = <String>{};
       for (final row in rows) {
         final dt = DateTime.tryParse((row['saved_at'] ?? '').toString());
@@ -245,8 +303,9 @@ class _RealReportContentState extends State<_RealReportContent> {
       final dt = DateTime.tryParse((row['saved_at'] ?? '').toString());
       if (dt == null) return false;
       final reportMonth = DateTime(dt.year, dt.month);
-      final inMonth = reportMonth.isAfter(start.subtract(const Duration(days: 1))) &&
-          reportMonth.isBefore(end.add(const Duration(days: 31)));
+      final inMonth =
+          reportMonth.isAfter(start.subtract(const Duration(days: 1))) &&
+              reportMonth.isBefore(end.add(const Duration(days: 31)));
       if (!inMonth) return false;
       if (_selectedCategoryFilter == 'All') return true;
       final category = (row['category'] ?? '').toString().trim();
@@ -397,7 +456,7 @@ class _RealReportContentState extends State<_RealReportContent> {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFD6DEE8)),
+          border: Border.all(color: _adminUiBorder),
           color: Colors.white,
         ),
         child: SizedBox(
@@ -883,8 +942,8 @@ class _RealReportContentState extends State<_RealReportContent> {
             return Dialog(
               insetPadding: const EdgeInsets.all(18),
               child: SizedBox(
-                width: 1180,
-                height: 780,
+                width: MediaQuery.of(dialogContext).size.width * 0.94,
+                height: MediaQuery.of(dialogContext).size.height * 0.9,
                 child: Column(
                   children: [
                     Container(
@@ -1015,7 +1074,8 @@ class _RealReportContentState extends State<_RealReportContent> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 4),
-            Text("Transaction Monitoring Report", style: TextStyle(fontSize: 14)),
+            Text("Transaction Monitoring Report",
+                style: TextStyle(fontSize: 14)),
           ],
         ),
       ),
@@ -1118,11 +1178,11 @@ class _RealReportContentState extends State<_RealReportContent> {
                     fillColor: const Color(0xFFF7FAFE),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFD6DEE8)),
+                      borderSide: const BorderSide(color: _adminUiBorder),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFD6DEE8)),
+                      borderSide: const BorderSide(color: _adminUiBorder),
                     ),
                     suffixIcon: _natureSearch.isEmpty
                         ? null
@@ -1144,15 +1204,10 @@ class _RealReportContentState extends State<_RealReportContent> {
         ),
       ),
       const SizedBox(height: 16),
-      Row(
-        children: [
-          Expanded(
-            child: Text(
-              LanguageService.translate("Recent Transactions"),
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-            ),
-          ),
-          ElevatedButton.icon(
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 760;
+          final button = ElevatedButton.icon(
             onPressed: (isLoading || isPrintingAll || filteredRows.isEmpty)
                 ? null
                 : _showPrintAllPreview,
@@ -1172,8 +1227,40 @@ class _RealReportContentState extends State<_RealReportContent> {
               backgroundColor: const Color(0xFF1E3A5F),
               foregroundColor: Colors.white,
             ),
-          ),
-        ],
+          );
+
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  LanguageService.translate("Recent Transactions"),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(width: double.infinity, child: button),
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              Expanded(
+                child: Text(
+                  LanguageService.translate("Recent Transactions"),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              button,
+            ],
+          );
+        },
       ),
       const SizedBox(height: 15),
     ];
@@ -1220,13 +1307,15 @@ class _RealReportContentState extends State<_RealReportContent> {
   }) {
     final items = itemsOverride ?? months;
     return Container(
+      constraints: const BoxConstraints(minWidth: 160, maxWidth: 240),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFBFC9D4)),
+        border: Border.all(color: _adminUiBorder),
         borderRadius: BorderRadius.circular(6),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
+          isExpanded: true,
           value: value,
           hint: Text(hint),
           items: items
@@ -1304,67 +1393,76 @@ class _RealReportTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _GlassPanel(
-      child: SingleChildScrollView(
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: DataTable(
-            columnSpacing: 30,
-            headingRowColor: WidgetStateProperty.all(const Color(0xFFEAF1F8)),
-            columns: const [
-              DataColumn(label: Text("Petsa")),
-              DataColumn(label: Text("Kategorya")),
-              DataColumn(label: Text("Reference No.")),
-              DataColumn(label: Text("Nature")),
-              DataColumn(label: Text("Marine Flow")),
-              DataColumn(label: Text("Halaga")),
-              DataColumn(label: Text("Receipt")),
-            ],
-            rows: rows.map((row) {
-              final dt = DateTime.tryParse((row['saved_at'] ?? '').toString());
-              final dateText = dt == null
-                  ? "-"
-                  : "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
-              final amount = _resolveAmount(row);
-              final serialNo = row['serial_no']?.toString().trim();
-              return DataRow(
-                cells: [
-                  DataCell(Text(dateText)),
-                  DataCell(Text((row['category'] ?? '-').toString())),
-                  DataCell(Text(serialNo?.isNotEmpty == true
-                      ? serialNo!
-                      : "REC-${row['id'] ?? '-'}")),
-                  DataCell(Text(_resolveNature(row))),
-                  DataCell(Text((row['marine_flow'] ?? '-').toString())),
-                  DataCell(Text(
-                    "PHP ${amount.toStringAsFixed(2)}",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  )),
-                  DataCell(
-                    TextButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ReceiptScreen(
-                              receiptData: row,
-                              readOnly: true,
-                              showSaveButton: false,
-                              showViewReceiptsButton: false,
-                              showPrintButton: false,
-                              useFullWidth: true,
-                            ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                child: DataTable(
+                  columnSpacing: 30,
+                  headingRowColor:
+                      WidgetStateProperty.all(const Color(0xFFEAF1F8)),
+                  columns: const [
+                    DataColumn(label: Text("Petsa")),
+                    DataColumn(label: Text("Kategorya")),
+                    DataColumn(label: Text("Reference No.")),
+                    DataColumn(label: Text("Nature")),
+                    DataColumn(label: Text("Marine Flow")),
+                    DataColumn(label: Text("Halaga")),
+                    DataColumn(label: Text("Receipt")),
+                  ],
+                  rows: rows.map((row) {
+                    final dt =
+                        DateTime.tryParse((row['saved_at'] ?? '').toString());
+                    final dateText = dt == null
+                        ? "-"
+                        : "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
+                    final amount = _resolveAmount(row);
+                    final serialNo = row['serial_no']?.toString().trim();
+                    return DataRow(
+                      cells: [
+                        DataCell(Text(dateText)),
+                        DataCell(Text((row['category'] ?? '-').toString())),
+                        DataCell(Text(serialNo?.isNotEmpty == true
+                            ? serialNo!
+                            : "REC-${row['id'] ?? '-'}")),
+                        DataCell(Text(_resolveNature(row))),
+                        DataCell(Text((row['marine_flow'] ?? '-').toString())),
+                        DataCell(Text(
+                          "PHP ${amount.toStringAsFixed(2)}",
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        )),
+                        DataCell(
+                          TextButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ReceiptScreen(
+                                    receiptData: row,
+                                    readOnly: true,
+                                    showSaveButton: false,
+                                    showViewReceiptsButton: false,
+                                    showPrintButton: false,
+                                    useFullWidth: true,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.visibility, size: 16),
+                            label: const Text("View"),
                           ),
-                        );
-                      },
-                      icon: const Icon(Icons.visibility, size: 16),
-                      label: const Text("View"),
-                    ),
-                  ),
-                ],
-              );
-            }).toList(),
-          ),
-        ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -1936,12 +2034,18 @@ class _ManageReceiptPageState extends State<ManageReceiptPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F6FA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E3A5F),
+        backgroundColor: _adminHeaderBg,
+        foregroundColor: _adminHeaderText,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shape: const Border(
+          bottom: BorderSide(color: _adminHeaderBorder),
+        ),
         title: const Text(
           "Manage Receipt",
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: _adminHeaderText),
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),
@@ -2405,7 +2509,7 @@ class _GlassPanel extends StatelessWidget {
           padding: padding,
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.78),
-            border: Border.all(color: const Color(0xFFD6DEE8)),
+            border: Border.all(color: _adminUiBorder),
             borderRadius: BorderRadius.circular(8),
             boxShadow: [
               BoxShadow(

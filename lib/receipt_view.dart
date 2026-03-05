@@ -6,6 +6,8 @@ import 'models/tabIcon_data.dart';
 import 'language_service.dart';
 import 'user_dashboard.dart';
 import 'managereciept.dart';
+import 'access_control_service.dart';
+import 'category_theme_color.dart';
 
 class ReceiptViewScreen extends StatefulWidget {
   const ReceiptViewScreen({super.key});
@@ -21,7 +23,8 @@ class _ReceiptViewScreenState extends State<ReceiptViewScreen> {
   Map<String, dynamic>? selectedReceipt;
   bool isLoading = false;
   bool hasError = false;
-  int _navIndex = 0;
+  final int _navIndex = 0;
+  AccessControlPolicy _policy = AccessControlPolicy.fullAccess();
 
   bool get _canUpdateUi {
     if (!mounted) return false;
@@ -39,7 +42,9 @@ class _ReceiptViewScreenState extends State<ReceiptViewScreen> {
   Future<void> _loadCategories() async {
     try {
       final client = Supabase.instance.client;
-      final fromNatures = await client.from('receipt_natures').select('category');
+      final policy = await AccessControlService.getCurrentUserPolicy();
+      final fromNatures =
+          await client.from('receipt_natures').select('category');
       final fromReceipts = await client.from('receipts').select('category');
 
       final seen = <String>{'all'};
@@ -63,7 +68,11 @@ class _ReceiptViewScreenState extends State<ReceiptViewScreen> {
 
       if (!_canUpdateUi) return;
       setState(() {
-        categories = values;
+        _policy = policy;
+        categories = values
+            .where((c) =>
+                c == 'All' || AccessControlService.isCategoryAllowed(policy, c))
+            .toList();
         if (!categories.contains(selectedCategory)) {
           selectedCategory = 'All';
         }
@@ -95,13 +104,20 @@ class _ReceiptViewScreenState extends State<ReceiptViewScreen> {
 
     try {
       final query = Supabase.instance.client.from('receipts').select();
-      final filteredQuery = selectedCategory != 'All'
+      final filteredQuery = (selectedCategory != 'All' &&
+              AccessControlService.isCategoryAllowed(_policy, selectedCategory))
           ? query.eq('category', selectedCategory)
           : query;
       final data = await filteredQuery.order('saved_at', ascending: false);
+      final allowedRows = List<Map<String, dynamic>>.from(data)
+          .where((row) => AccessControlService.isCategoryAllowed(
+                _policy,
+                (row['category'] ?? '').toString(),
+              ))
+          .toList();
       if (_canUpdateUi) {
         setState(() {
-          receipts = List<Map<String, dynamic>>.from(data);
+          receipts = allowedRows;
           selectedReceipt = receipts.isNotEmpty ? receipts.first : null;
         });
       }
@@ -121,37 +137,7 @@ class _ReceiptViewScreenState extends State<ReceiptViewScreen> {
   }
 
   Color _getCategoryColor(String? category) {
-    final v = (category ?? '').toLowerCase().trim();
-    if (v == 'business permit fees' || v.contains('business permit')) {
-      return const Color(0xFFFF9800);
-    }
-    if (v == 'inspection fees' || v.contains('inspection')) {
-      return const Color(0xFF8E24AA);
-    }
-    if (v == 'other economic enterprises' || v.contains('other economic')) {
-      return const Color(0xFFFFEB3B);
-    }
-    if (v == 'other service income' || v.contains('other service')) {
-      return const Color(0xFF9E9E9E);
-    }
-    if (v == 'parking and terminal fees' || v.contains('parking and terminal')) {
-      return const Color(0xFFEC407A);
-    }
-    if (v == 'amusement tax/' ||
-        v == 'amusement tax' ||
-        v.contains('amusement tax')) {
-      return const Color(0xFF9ACD32);
-    }
-    if (v == 'slaughter' || v == 'slaugther' || v.contains('slaugh')) {
-      return const Color(0xFFD32F2F);
-    }
-    if (v == 'rent' || v == 'renta' || v.contains('rent')) {
-      return const Color(0xFF2E7D32);
-    }
-    if (v == 'marine' || v.contains('marine') || v.contains('fish')) {
-      return const Color(0xFF2E7D32);
-    }
-    return Colors.grey;
+    return categoryThemeColor((category ?? '').trim());
   }
 
   IconData _getCategoryIcon(String? category) {
@@ -168,37 +154,7 @@ class _ReceiptViewScreenState extends State<ReceiptViewScreen> {
   }
 
   Color _themeColorForCategory(String category) {
-    final v = category.toLowerCase().trim();
-    if (v == 'business permit fees' || v.contains('business permit')) {
-      return const Color(0xFFFF9800);
-    }
-    if (v == 'inspection fees' || v.contains('inspection')) {
-      return const Color(0xFF8E24AA);
-    }
-    if (v == 'other economic enterprises' || v.contains('other economic')) {
-      return const Color(0xFFFFEB3B);
-    }
-    if (v == 'other service income' || v.contains('other service')) {
-      return const Color(0xFF9E9E9E);
-    }
-    if (v == 'parking and terminal fees' || v.contains('parking and terminal')) {
-      return const Color(0xFFEC407A);
-    }
-    if (v == 'amusement tax/' ||
-        v == 'amusement tax' ||
-        v.contains('amusement tax')) {
-      return const Color(0xFF9ACD32);
-    }
-    if (v == 'slaughter' || v == 'slaugther' || v.contains('slaugh')) {
-      return const Color(0xFFD32F2F);
-    }
-    if (v == 'rent' || v == 'renta' || v.contains('rent')) {
-      return const Color(0xFF2E7D32);
-    }
-    if (v == 'marine' || v.contains('marine') || v.contains('fish')) {
-      return const Color(0xFF2E7D32);
-    }
-    return const Color(0xFF1E3A5F);
+    return categoryThemeColor(category);
   }
 
   String _formatDate(dynamic dateValue) {
@@ -492,3 +448,4 @@ class _ReceiptViewScreenState extends State<ReceiptViewScreen> {
     );
   }
 }
+

@@ -3,6 +3,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'login.dart';
 import 'session_service.dart';
 
+const Color _adminHeaderBg = Color(0xFF1E3A5F);
+const Color _adminHeaderText = Color(0xFFFFFFFF);
+const Color _adminHeaderBorder = Color(0xFF1E3A5F);
+
 class NatureManagementScreen extends StatefulWidget {
   const NatureManagementScreen({super.key});
 
@@ -356,7 +360,8 @@ class _NatureManagementScreenState extends State<NatureManagementScreen> {
         if (!_isMalformedArrayLiteralError(e)) rethrow;
         final retryPayload = Map<String, dynamic>.from(natureData);
         final code = (retryPayload['nature_code'] ?? '').toString().trim();
-        retryPayload['nature_code'] = code.isEmpty ? <String>[] : <String>[code];
+        retryPayload['nature_code'] =
+            code.isEmpty ? <String>[] : <String>[code];
         await client.from('receipt_natures').insert(retryPayload);
       }
 
@@ -469,9 +474,20 @@ class _NatureManagementScreenState extends State<NatureManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F8FF),
       appBar: AppBar(
-        title: const Text('Manage Nature Entries'),
-        backgroundColor: const Color(0xFF14345C),
+        title: const Text(
+          'Manage Nature Entries',
+          style: TextStyle(color: _adminHeaderText),
+        ),
+        backgroundColor: _adminHeaderBg,
+        foregroundColor: _adminHeaderText,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shape: const Border(
+          bottom: BorderSide(color: _adminHeaderBorder),
+        ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -661,11 +677,11 @@ class _NatureManagementScreenState extends State<NatureManagementScreen> {
                 ConstrainedBox(
                   constraints: const BoxConstraints(minWidth: 180),
                   child: Text(
-                      _entriesHeaderLabel(),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    _entriesHeaderLabel(),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 OutlinedButton.icon(

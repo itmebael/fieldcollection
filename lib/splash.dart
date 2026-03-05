@@ -6,6 +6,7 @@ import 'login.dart';
 import 'selection_screen.dart';
 import 'session_service.dart';
 import 'user_dashboard.dart';
+import 'access_control_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -49,6 +50,10 @@ class _SplashScreenState extends State<SplashScreen>
     if (session.role == 'user') {
       final category = session.category?.trim();
       if (category == null || category.isEmpty) {
+        return const CategorySelectionScreen(isAdmin: false);
+      }
+      final policy = await AccessControlService.getCurrentUserPolicy();
+      if (!AccessControlService.isCategoryAllowed(policy, category)) {
         return const CategorySelectionScreen(isAdmin: false);
       }
       return UserDashboardNavigation(

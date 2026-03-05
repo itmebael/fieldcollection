@@ -8,6 +8,7 @@ import 'settings.dart';
 import 'offline_storage_page.dart';
 import 'offline_receipt_storage_service.dart';
 import 'language_service.dart';
+import 'category_theme_color.dart';
 
 class UserDashboardNavigation extends StatefulWidget {
   final String selectedCategory;
@@ -30,50 +31,21 @@ class _UserDashboardNavigationState extends State<UserDashboardNavigation> {
   late String _selectedCategory;
 
   Color _themeColorForCategory(String category) {
-    final v = category.toLowerCase().trim();
-    if (v == 'business permit fees' || v.contains('business permit')) {
-      return const Color(0xFFFF9800);
-    }
-    if (v == 'inspection fees' || v.contains('inspection')) {
-      return const Color(0xFF8E24AA);
-    }
-    if (v == 'other economic enterprises' || v.contains('other economic')) {
-      return const Color(0xFFFFEB3B);
-    }
-    if (v == 'other service income' || v.contains('other service')) {
-      return const Color(0xFF9E9E9E);
-    }
-    if (v == 'parking and terminal fees' || v.contains('parking and terminal')) {
-      return const Color(0xFFEC407A);
-    }
-    if (v == 'amusement tax/' ||
-        v == 'amusement tax' ||
-        v.contains('amusement tax')) {
-      return const Color(0xFF9ACD32);
-    }
-    if (v == 'slaughter' || v == 'slaugther' || v.contains('slaugh')) {
-      return const Color(0xFFD32F2F);
-    }
-    if (v == 'rent' || v == 'renta' || v.contains('rent')) {
-      return const Color(0xFF2E7D32);
-    }
-    if (v == 'marine' || v.contains('marine') || v.contains('fish')) {
-      return const Color(0xFF2E7D32);
-    }
-    return const Color(0xFF1E3A5F);
+    return categoryThemeColor(category);
   }
 
   Widget _screenForIndex(int index) {
     switch (index) {
       case 0:
         return UserReceiptHistoryPage(
-          key: ValueKey('user_history_$_selectedCategory'),
-          selectedCategory: _selectedCategory,
+          key: const ValueKey('user_history_all'),
+          selectedCategory: 'All',
         );
       case 1:
         return DashboardContent(
-          key: ValueKey('user_analytics_$_selectedCategory'),
-          selectedCategory: _selectedCategory,
+          key: const ValueKey('user_analytics_all'),
+          selectedCategory: 'All',
+          userScoped: true,
         );
       case 2:
         return OfflineStoragePage(
@@ -140,10 +112,10 @@ class _UserDashboardNavigationState extends State<UserDashboardNavigation> {
                 ? 0.48
                 : 0.52;
     final textScale = (screenWidth < 380
-        ? 1.0
-        : screenWidth < 480
-            ? 1.06
-            : 1.12) +
+            ? 1.0
+            : screenWidth < 480
+                ? 1.06
+                : 1.12) +
         responsiveBoost;
     final bottomBarPadding = BottomBarView.baseHeight + media.padding.bottom;
     return ValueListenableBuilder<String>(
@@ -151,6 +123,7 @@ class _UserDashboardNavigationState extends State<UserDashboardNavigation> {
       builder: (context, language, _) {
         return Scaffold(
           body: Stack(
+            fit: StackFit.expand,
             children: [
               // =======================
               // BACKGROUND GLOW CIRCLES
